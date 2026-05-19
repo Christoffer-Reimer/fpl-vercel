@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FPL Player Evaluation Framework</title>
+<style>
+:root{--bg:#f4f3f0;--sf:#fff;--sf2:#f0efe9;--sf3:#e8e7e2;--bd:rgba(0,0,0,0.09);--tx:#1a1a18;--mu:#6b6b67;--hi:#9b9b97;
+  --gbg:#eaf3de;--gtx:#3b6d11;--bbg:#e6f1fb;--btx:#185fa5;--rbg:#fcebeb;--rtx:#a32d2d;
+  --abg:#faeeda;--atx:#854f0b;--pbg:#eeedfe;--ptx:#3c3489;--tbg:#e1f5ee;--ttx:#0f6e56;--r:10px;--rs:6px}
+@media(prefers-color-scheme:dark){:root{--bg:#181816;--sf:#222220;--sf2:#2a2a28;--sf3:#333330;--bd:rgba(255,255,255,0.09);
+  --tx:#f0efe9;--mu:#9b9b97;--hi:#6b6b67;--gbg:#173404;--gtx:#c0dd97;--bbg:#042c53;--btx:#b5d4f4;
+  --rbg:#501313;--rtx:#f7c1c1;--abg:#412402;--atx:#fac775;--pbg:#26215c;--ptx:#cecbf6;--tbg:#04342c;--ttx:#9fe1cb}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:1.5rem 1.25rem}
+h1{font-size:22px;font-weight:600}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--mu);margin-bottom:10px}
+.card{background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem}
+.badge{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px}
+.bg{background:var(--gbg);color:var(--gtx)} .bb{background:var(--bbg);color:var(--btx)}
+.br{background:var(--rbg);color:var(--rtx)} .ba{background:var(--abg);color:var(--atx)}
+.bp{background:var(--pbg);color:var(--ptx)} .bt{background:var(--tbg);color:var(--ttx)}
+.nav{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
+.nav button{font-size:13px;padding:6px 16px;border-radius:var(--rs);border:.5px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer;transition:all .15s}
+.nav button:hover{background:var(--sf2)}
+.nav button.on{background:var(--sf2);color:var(--tx);font-weight:500;border-color:var(--tx)}
+.section{display:none}.section.on{display:block}
+input,select{background:var(--sf);border:.5px solid var(--bd);border-radius:var(--rs);padding:7px 12px;font-size:13px;color:var(--tx);outline:none}
+input:focus,select:focus{border-color:var(--btx)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;font-weight:600;color:var(--mu);text-align:left;padding:6px 8px;border-bottom:.5px solid var(--bd);cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{color:var(--tx)}
+td{padding:7px 8px;border-bottom:.5px solid var(--bd);color:var(--tx);vertical-align:middle}
+tr:last-child td{border-bottom:none} tr:hover td{background:var(--sf2)}
+.score-bar{display:flex;align-items:center;gap:6px}
+.bar-track{flex:1;height:6px;background:var(--sf3);border-radius:3px;min-width:60px}
+.bar-fill{height:6px;border-radius:3px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem;align-items:flex-end}
+.filters label{font-size:12px;color:var(--mu);display:block;margin-bottom:4px}
+.search-wrap{position:relative;margin-bottom:8px}
+.search-wrap input{width:100%}
+.dropdown{position:absolute;top:100%;left:0;right:0;background:var(--sf);border:.5px solid var(--bd);border-radius:var(--rs);z-index:100;max-height:200px;overflow-y:auto;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.dropdown.open{display:block}
+.dropdown-item{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:.5px solid var(--bd)}
+.dropdown-item:last-child{border-bottom:none}
+.dropdown-item:hover{background:var(--sf2)}
+.overall-score{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:13px;font-weight:700}
+.os-great{background:var(--gbg);color:var(--gtx)} .os-good{background:var(--bbg);color:var(--btx)}
+.os-avg{background:var(--abg);color:var(--atx)} .os-poor{background:var(--rbg);color:var(--rtx)}
+.pos-gk{background:#faeeda;color:#854f0b} .pos-def{background:#e6f1fb;color:#185fa5}
+.pos-mid{background:#eaf3de;color:#3b6d11} .pos-fwd{background:#fcebeb;color:#a32d2d}
+.compare-header{background:var(--sf2);border-radius:var(--rs);padding:14px;text-align:center}
+.metric-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:.5px solid var(--bd)}
+.metric-row:last-child{border-bottom:none}
+.metric-label{font-size:12px;color:var(--mu);text-align:center;flex:1;padding:0 8px}
+.metric-val{font-size:14px;font-weight:500;min-width:80px}
+.winner{color:var(--gtx)} .loser{color:var(--rtx)}
+.checklist-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:.5px solid var(--bd)}
+.checklist-item:last-child{border-bottom:none}
+.check-icon{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.check-yes{background:var(--gbg);color:var(--gtx)} .check-no{background:var(--rbg);color:var(--rtx)} .check-warn{background:var(--abg);color:var(--atx)}
+.check-label{font-weight:500;margin-bottom:2px;font-size:13px}
+.check-detail{font-size:12px;color:var(--mu)}
+.decision-result{border-radius:var(--r);padding:1rem 1.25rem;margin-top:1rem;font-size:14px}
+.decision-go{background:var(--gbg);color:var(--gtx)} .decision-hold{background:var(--rbg);color:var(--rtx)} .decision-maybe{background:var(--abg);color:var(--atx)}
+.loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 2rem;gap:16px}
+.spinner{width:36px;height:36px;border:3px solid var(--bd);border-top-color:var(--btx);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-text{font-size:14px;color:var(--mu)}
+.loader-step{font-size:12px;color:var(--hi)}
+.error-box{background:var(--rbg);color:var(--rtx);border-radius:var(--r);padding:1rem 1.25rem;margin:1rem 0}
+.last-updated{font-size:12px;color:var(--hi);margin-top:3px}
+footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-bottom:2rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;flex-wrap:wrap;gap:8px">
+  <div>
+    <h1>FPL Player Evaluation Framework</h1>
+    <p class="last-updated" id="last-updated">Loading live data...</p>
+  </div>
+  <button onclick="loadData()" id="refresh-btn" style="padding:7px 16px;border-radius:var(--rs);border:.5px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
+    ↻ Refresh data
+  </button>
+</div>
+
+<div id="loading" class="loader">
+  <div class="spinner"></div>
+  <div class="loader-text">Fetching live FPL data...</div>
+  <div class="loader-step" id="load-step">Connecting to FPL API</div>
+</div>
+
+<div id="main-content" style="display:none">
+  <div class="nav">
+    <button class="on" onclick="show('rankings',this)">Player rankings</button>
+    <button onclick="show('compare',this)">Compare players</button>
+    <button onclick="show('transfer',this)">Transfer checker</button>
+    <button onclick="show('checklists',this)">Decision checklists</button>
+  </div>
+
+  <!-- RANKINGS -->
+  <div id="s-rankings" class="section on">
+    <div class="card">
+      <p class="lbl">Filter & sort</p>
+      <div class="filters">
+        <div><label>Position</label>
+          <select id="f-pos" onchange="renderTable()">
+            <option value="">All positions</option>
+            <option value="GK">GK</option><option value="DEF">DEF</option>
+            <option value="MID">MID</option><option value="FWD">FWD</option>
+          </select>
+        </div>
+        <div><label>Max price (£m)</label>
+          <input type="number" id="f-maxcost" placeholder="e.g. 8.0" step="0.5" style="width:110px" oninput="renderTable()">
+        </div>
+        <div><label>Min price (£m)</label>
+          <input type="number" id="f-mincost" placeholder="e.g. 4.0" step="0.5" style="width:110px" oninput="renderTable()">
+        </div>
+        <div><label>Max ownership (%)</label>
+          <input type="number" id="f-maxown" placeholder="e.g. 20" style="width:110px" oninput="renderTable()">
+        </div>
+        <div><label>Search player</label>
+          <input type="text" id="f-search" placeholder="Name..." style="width:150px" oninput="renderTable()">
+        </div>
+        <div>
+          <button onclick="clearFilters()" style="padding:7px 14px;border-radius:var(--rs);border:.5px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer;font-size:13px">Clear</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th onclick="sortBy('name')">Player</th>
+            <th onclick="sortBy('pos')">Pos</th>
+            <th onclick="sortBy('team')">Club</th>
+            <th onclick="sortBy('cost')">Price</th>
+            <th onclick="sortBy('total_pts')">Total pts</th>
+            <th onclick="sortBy('pts_per_game')">Pts/GW</th>
+            <th onclick="sortBy('form')">Form</th>
+            <th onclick="sortBy('mins_pct')">Mins %</th>
+            <th onclick="sortBy('value')">Value</th>
+            <th onclick="sortBy('selected_pct')">Own %</th>
+            <th onclick="sortBy('gi_per90')">GI/90</th>
+            <th onclick="sortBy('overall')">Score</th>
+          </tr></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--hi);margin-top:10px">Showing top 100 · Click column headers to sort · Score weighted across value, consistency, minutes, form & goal involvement</p>
+    </div>
+  </div>
+
+  <!-- COMPARE -->
+  <div id="s-compare" class="section">
+    <div class="card">
+      <p class="lbl">Head-to-head player comparison</p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+        <div style="flex:1;min-width:220px">
+          <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Player A</p>
+          <div class="search-wrap">
+            <input type="text" id="cmp-a-input" placeholder="Search player..." oninput="searchPlayer('a')" autocomplete="off">
+            <div class="dropdown" id="cmp-a-drop"></div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:220px">
+          <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Player B</p>
+          <div class="search-wrap">
+            <input type="text" id="cmp-b-input" placeholder="Search player..." oninput="searchPlayer('b')" autocomplete="off">
+            <div class="dropdown" id="cmp-b-drop"></div>
+          </div>
+        </div>
+      </div>
+      <div id="compare-result"></div>
+    </div>
+  </div>
+
+  <!-- TRANSFER CHECKER -->
+  <div id="s-transfer" class="section">
+    <div class="card">
+      <p class="lbl">Transfer decision checker</p>
+      <p style="font-size:13px;color:var(--mu);margin-bottom:1rem">Select the player you want to buy and the player you want to sell. Get a data-backed recommendation.</p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+        <div style="flex:1;min-width:220px">
+          <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Player IN <span class="badge bg">buying</span></p>
+          <div class="search-wrap">
+            <input type="text" id="tc-in-input" placeholder="Search player to buy..." oninput="searchPlayer('tc-in')" autocomplete="off">
+            <div class="dropdown" id="tc-in-drop"></div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:220px">
+          <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Player OUT <span class="badge br">selling</span></p>
+          <div class="search-wrap">
+            <input type="text" id="tc-out-input" placeholder="Search player to sell..." oninput="searchPlayer('tc-out')" autocomplete="off">
+            <div class="dropdown" id="tc-out-drop"></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:flex-end">
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Free transfer?</label>
+          <select id="tc-free">
+            <option value="1">Yes — free transfer</option>
+            <option value="0">No — costs 4 pts hit</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Reason for transfer</label>
+          <select id="tc-reason" style="width:220px">
+            <option value="planned">Planned (fixtures/form driven)</option>
+            <option value="injury">Injury/suspension cover</option>
+            <option value="reactive">After a bad gameweek</option>
+            <option value="upgrade">Upgrading to better player</option>
+            <option value="downgrade">Freeing up funds</option>
+          </select>
+        </div>
+        <button onclick="runTransferCheck()" style="padding:8px 20px;border-radius:var(--rs);border:.5px solid var(--btx);background:var(--bbg);color:var(--btx);cursor:pointer;font-size:13px;font-weight:500">Analyse →</button>
+      </div>
+      <div id="tc-result"></div>
+    </div>
+  </div>
+
+  <!-- CHECKLISTS -->
+  <div id="s-checklists" class="section">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+
+      <div class="card">
+        <p class="lbl">Before buying a player</p>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Good upcoming fixtures?</div><div class="check-detail">Check the next 5 GWs. Avoid buying into a hard run.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Reliable starter?</div><div class="check-detail">Target 85%+ minutes in recent weeks. Rotation risk kills value.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Form real or a one-off?</div><div class="check-detail">Look at underlying stats (shots, key passes) not just points.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Price fair for the output?</div><div class="check-detail">Target 6+ pts per game for a £8m+ player.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-warn">!</div><div><div class="check-label">Buying because of last week?</div><div class="check-detail">If yes, wait 24 hours and check again. This is the panic trap.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-warn">!</div><div><div class="check-label">Will they be highly owned?</div><div class="check-detail">40%+ ownership means missing them is a big risk — but so is everyone blanking together.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-no">✗</div><div><div class="check-label">Don't buy into a difficult fixture</div><div class="check-detail">Even great players struggle vs top defences.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-no">✗</div><div><div class="check-label">Don't overpay for potential</div><div class="check-detail">A £12m player needs 8+ pts/GW to justify the cost.</div></div></div>
+      </div>
+
+      <div class="card">
+        <p class="lbl">Sell vs hold decision</p>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Sell if: fixtures get significantly harder</div><div class="check-detail">3+ difficult games in a row is a strong sell signal.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Sell if: lost their starting place</div><div class="check-detail">Rotation or injury that looks long-term.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Sell if: price risen and better value exists</div><div class="check-detail">Use the profit to upgrade elsewhere.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-warn">!</div><div><div class="check-label">One bad week is not a sell signal</div><div class="check-detail">Check if underlying stats still look good.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-warn">!</div><div><div class="check-label">Don't sell during a good fixture run</div><div class="check-detail">Even patchy form + easy fixtures = potential.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-no">✗</div><div><div class="check-label">Don't sell just because they blanked</div><div class="check-detail">Top players blank regularly. It's variance, not decline.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-no">✗</div><div><div class="check-label">Don't sell captain before a big fixture</div><div class="check-detail">Sell after the good run, not before it.</div></div></div>
+      </div>
+
+      <div class="card">
+        <p class="lbl">Premium player criteria (£9m+)</p>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Must average 7+ pts per game</div><div class="check-detail">Premiums need to deliver consistently to justify the budget.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Must be captain material most weeks</div><div class="check-detail">If you wouldn't captain them, they're probably not worth the premium cost.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Buy early and hold all season</div><div class="check-detail">Rotating premiums is expensive. Your Haaland/Salah churn cost you this season.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-warn">!</div><div><div class="check-label">Max 2–3 premiums in your squad</div><div class="check-detail">More than 3 leaves your bench dangerously thin.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-no">✗</div><div><div class="check-label">Don't sell a premium after one blank</div><div class="check-detail">Salah and Haaland will always return. Hold through blank weeks.</div></div></div>
+      </div>
+
+      <div class="card">
+        <p class="lbl">Differential hunting (sub 15% owned)</p>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Form + easy fixtures = key signal</div><div class="check-detail">The combination of both is the strongest differential indicator.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Target set piece takers at budget clubs</div><div class="check-detail">Penalty/free kick takers at £5–6m are gold dust.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-yes">✓</div><div><div class="check-label">Watch transfer activity</div><div class="check-detail">Rising transfers in = the crowd is spotting something. Don't chase too late.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-warn">!</div><div><div class="check-label">Differentials are higher risk</div><div class="check-detail">Only use when you need rank ground, not when protecting a good rank.</div></div></div>
+        <div class="checklist-item"><div class="check-icon check-no">✗</div><div><div class="check-label">Don't pick differentials just to be different</div><div class="check-detail">There needs to be a data-backed reason, not just low ownership.</div></div></div>
+      </div>
+
+      <div class="card" style="grid-column:1/-1">
+        <p class="lbl">The 24-hour rule — your most important habit for 26/27</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:4px">
+          <div style="background:var(--sf2);border-radius:var(--rs);padding:14px">
+            <p style="font-weight:500;margin-bottom:6px">Step 1 — After a bad GW</p>
+            <p style="font-size:13px;color:var(--mu)">Close FPL. Do not open the transfer page. Write down which players frustrated you but don't act yet.</p>
+          </div>
+          <div style="background:var(--sf2);border-radius:var(--rs);padding:14px">
+            <p style="font-weight:500;margin-bottom:6px">Step 2 — Next day</p>
+            <p style="font-size:13px;color:var(--mu)">Check fixtures for the next 5 GWs. Look at underlying stats (xG, xA). Is the frustration still justified by the data?</p>
+          </div>
+          <div style="background:var(--sf2);border-radius:var(--rs);padding:14px">
+            <p style="font-weight:500;margin-bottom:6px">Step 3 — Then decide</p>
+            <p style="font-size:13px;color:var(--mu)">If the data supports the transfer, make it. If it was just a bad week, hold. Most of the time you'll hold — and that's the right call.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer id="footer"></footer>
+</div>
+
+<script>
+const API_BASE = "/api/fpl";
+let PLAYERS = [];
+let sortCol = "overall", sortDir = -1;
+let compareA = null, compareB = null;
+let tcIn = null, tcOut = null;
+
+async function loadData() {
+  document.getElementById("loading").style.display = "flex";
+  document.getElementById("main-content").style.display = "none";
+  document.getElementById("last-updated").textContent = "Loading live data...";
+
+  try {
+    setStep("Fetching live FPL data...");
+    const res = await fetch(`${API_BASE}?endpoint=bootstrap-static/`);
+    if (!res.ok) throw new Error("API returned " + res.status);
+    const data = await res.json();
+    if (!data.elements) throw new Error("Invalid data received");
+
+    setStep("Processing player metrics...");
+    const teams = {};
+    data.teams.forEach(t => teams[t.id] = t);
+    const currentGW = (data.events.find(e => e.is_current) || data.events[data.events.length - 1] || {id: 37}).id;
+
+    PLAYERS = data.elements
+      .filter(p => p.status !== "u")
+      .map(p => {
+        const team = teams[p.team] || {};
+        const cost = p.now_cost / 10;
+        const totalPts = p.total_points || 0;
+        const ptsPerGame = parseFloat(p.points_per_game || 0);
+        const form = parseFloat(p.form || 0);
+        const minutes = p.minutes || 0;
+        const maxMins = currentGW * 90;
+        const minsPct = maxMins > 0 ? Math.round((minutes / maxMins) * 100) : 0;
+        const selectedPct = parseFloat(p.selected_by_percent || 0);
+        const value = cost > 0 ? Math.round((totalPts / cost) * 10) / 10 : 0;
+        const goals = p.goals_scored || 0;
+        const assists = p.assists || 0;
+        const cleanSheets = p.clean_sheets || 0;
+        const giPer90 = minutes >= 90 ? Math.round(((goals + assists) / (minutes / 90)) * 100) / 100 : 0;
+        const pos = ["", "GK", "DEF", "MID", "FWD"][p.element_type] || "";
+        const costChange = (p.cost_change_start || 0) / 10;
+
+        const posAvg = {GK: 20, DEF: 25, MID: 30, FWD: 28};
+        const valueScore = Math.min(10, Math.round((value / (posAvg[pos] || 25)) * 100) / 10);
+        const consistencyScore = Math.min(10, Math.round(ptsPerGame / 1.2 * 10) / 10);
+        const minsScore = Math.min(10, Math.round(minsPct / 10 * 10) / 10);
+        const formScore = Math.min(10, Math.round(form / 1.2 * 10) / 10);
+        const giScore = pos === "MID" || pos === "FWD"
+          ? Math.min(10, Math.round(giPer90 * 50) / 10)
+          : Math.min(10, Math.round(cleanSheets / 3 * 10) / 10);
+
+        const overall = Math.round((valueScore * 0.25 + consistencyScore * 0.25 + minsScore * 0.20 + formScore * 0.15 + giScore * 0.15) * 10) / 10;
+
+        return {
+          id: p.id, name: p.web_name,
+          full_name: `${p.first_name} ${p.second_name}`,
+          team: team.short_name || "?", team_full: team.name || "?",
+          pos, cost, cost_change: costChange,
+          total_pts: totalPts, pts_per_game: ptsPerGame,
+          form, minutes, mins_pct: minsPct,
+          selected_pct: selectedPct, value,
+          goals, assists, clean_sheets: cleanSheets,
+          bonus: p.bonus || 0, gi_per90: giPer90,
+          ict_index: parseFloat(p.ict_index || 0),
+          transfers_in: p.transfers_in_event || 0,
+          transfers_out: p.transfers_out_event || 0,
+          value_score: valueScore, consistency_score: consistencyScore,
+          mins_score: minsScore, form_score: formScore,
+          gi_score: giScore, overall,
+          status: p.status || "a", news: p.news || "",
+        };
+      });
+
+    PLAYERS.sort((a, b) => b.overall - a.overall);
+
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("main-content").style.display = "block";
+    document.getElementById("last-updated").textContent =
+      `Live data · GW${currentGW} · Updated ${new Date().toLocaleString("en-GB", {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} · ${PLAYERS.length} players loaded`;
+    document.getElementById("footer").textContent =
+      `FPL Player Evaluation Framework · Live data · Built for Reimers Tunge Drenge`;
+
+    renderTable();
+
+  } catch(e) {
+    document.getElementById("loading").innerHTML = `
+      <div class="error-box" style="max-width:500px;text-align:center">
+        <strong>Could not load FPL data</strong><br>
+        <span style="font-size:13px">${e.message}</span><br><br>
+        <span style="font-size:12px">Make sure you're opening this file directly in your browser (not via a web server). Try refreshing or check your internet connection.</span><br><br>
+        <button onclick="loadData()" style="padding:7px 16px;border-radius:6px;border:.5px solid var(--rtx);background:transparent;color:var(--rtx);cursor:pointer;font-size:13px">Try again</button>
+      </div>`;
+  }
+}
+
+function setStep(msg) {
+  const el = document.getElementById("load-step");
+  if (el) el.textContent = msg;
+}
+
+function posClass(pos) { return {GK:"pos-gk",DEF:"pos-def",MID:"pos-mid",FWD:"pos-fwd"}[pos] || ""; }
+function osClass(s) { return s >= 7 ? "os-great" : s >= 5 ? "os-good" : s >= 3 ? "os-avg" : "os-poor"; }
+function barColor(s) { return s >= 7 ? "#639922" : s >= 5 ? "#378ADD" : s >= 3 ? "#BA7517" : "#E24B4A"; }
+function statusBadge(p) {
+  if (p.status === "i") return ` <span class="badge br" style="font-size:10px">Injured</span>`;
+  if (p.status === "d") return ` <span class="badge ba" style="font-size:10px">Doubt</span>`;
+  if (p.status === "s") return ` <span class="badge br" style="font-size:10px">Suspended</span>`;
+  return "";
+}
+
+function renderTable() {
+  const pos     = document.getElementById("f-pos").value;
+  const maxCost = parseFloat(document.getElementById("f-maxcost").value) || 999;
+  const minCost = parseFloat(document.getElementById("f-mincost").value) || 0;
+  const maxOwn  = parseFloat(document.getElementById("f-maxown").value) || 100;
+  const search  = document.getElementById("f-search").value.toLowerCase();
+
+  let filtered = PLAYERS.filter(p =>
+    (!pos || p.pos === pos) &&
+    p.cost <= maxCost && p.cost >= minCost &&
+    p.selected_pct <= maxOwn &&
+    (!search || p.name.toLowerCase().includes(search) || p.full_name.toLowerCase().includes(search))
+  );
+
+  filtered.sort((a, b) => {
+    const av = a[sortCol], bv = b[sortCol];
+    if (typeof av === "number") return sortDir * (bv - av);
+    return sortDir * ("" + bv).localeCompare("" + av);
+  });
+
+  const top = filtered.slice(0, 100);
+  document.getElementById("table-body").innerHTML = top.map(p => `
+    <tr>
+      <td><span style="font-weight:500">${p.name}</span>${statusBadge(p)}${p.news ? `<span style="font-size:11px;color:var(--mu);display:block">${p.news.substring(0,55)}</span>` : ""}</td>
+      <td><span class="badge ${posClass(p.pos)}">${p.pos}</span></td>
+      <td style="color:var(--mu)">${p.team}</td>
+      <td>£${p.cost.toFixed(1)}m${p.cost_change > 0 ? `<span style="font-size:10px;color:var(--gtx)"> +${p.cost_change.toFixed(1)}</span>` : p.cost_change < 0 ? `<span style="font-size:10px;color:var(--rtx)"> ${p.cost_change.toFixed(1)}</span>` : ""}</td>
+      <td>${p.total_pts}</td>
+      <td style="font-weight:500">${p.pts_per_game}</td>
+      <td>${p.form}</td>
+      <td>${p.mins_pct}%</td>
+      <td style="font-weight:500">${p.value}</td>
+      <td>${p.selected_pct}%</td>
+      <td>${p.gi_per90}</td>
+      <td><div class="score-bar"><div class="bar-track"><div class="bar-fill" style="width:${p.overall * 10}%;background:${barColor(p.overall)}"></div></div><span class="overall-score ${osClass(p.overall)}">${p.overall}</span></div></td>
+    </tr>`).join("");
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = -1; }
+  renderTable();
+}
+
+function clearFilters() {
+  ["f-pos","f-maxcost","f-mincost","f-maxown","f-search"].forEach(id => {
+    const el = document.getElementById(id);
+    el.tagName === "SELECT" ? el.value = "" : el.value = "";
+  });
+  renderTable();
+}
+
+function searchPlayer(slot) {
+  const ids = { a: ["cmp-a-input","cmp-a-drop"], b: ["cmp-b-input","cmp-b-drop"], "tc-in": ["tc-in-input","tc-in-drop"], "tc-out": ["tc-out-input","tc-out-drop"] };
+  const [inputId, dropId] = ids[slot];
+  const q = document.getElementById(inputId).value.toLowerCase();
+  const drop = document.getElementById(dropId);
+  if (q.length < 2) { drop.classList.remove("open"); return; }
+  const matches = PLAYERS.filter(p => p.name.toLowerCase().includes(q) || p.full_name.toLowerCase().includes(q)).slice(0, 8);
+  drop.innerHTML = matches.map(p => `<div class="dropdown-item" onclick="selectPlayer('${slot}',${p.id})">${p.name} <span style="color:var(--mu);font-size:11px">${p.team} · ${p.pos} · £${p.cost.toFixed(1)}m</span></div>`).join("");
+  drop.classList.add("open");
+}
+
+function selectPlayer(slot, id) {
+  const p = PLAYERS.find(x => x.id === id);
+  if (!p) return;
+  const ids = { a: ["cmp-a-input","cmp-a-drop"], b: ["cmp-b-input","cmp-b-drop"], "tc-in": ["tc-in-input","tc-in-drop"], "tc-out": ["tc-out-input","tc-out-drop"] };
+  const [inputId, dropId] = ids[slot];
+  document.getElementById(inputId).value = `${p.name} (${p.team})`;
+  document.getElementById(dropId).classList.remove("open");
+  if (slot === "a") { compareA = p; renderCompare(); }
+  else if (slot === "b") { compareB = p; renderCompare(); }
+  else if (slot === "tc-in") tcIn = p;
+  else tcOut = p;
+}
+
+function renderCompare() {
+  const el = document.getElementById("compare-result");
+  if (!compareA || !compareB) { el.innerHTML = ""; return; }
+  const a = compareA, b = compareB;
+  const metrics = [
+    { label: "Price", ka: "cost", fmt: v => "£" + v.toFixed(1) + "m", lowerBetter: true },
+    { label: "Total points", ka: "total_pts", fmt: v => v },
+    { label: "Points per game", ka: "pts_per_game", fmt: v => v },
+    { label: "Form", ka: "form", fmt: v => v },
+    { label: "Minutes %", ka: "mins_pct", fmt: v => v + "%" },
+    { label: "Value (pts/£m)", ka: "value", fmt: v => v },
+    { label: "Goals", ka: "goals", fmt: v => v },
+    { label: "Assists", ka: "assists", fmt: v => v },
+    { label: "Bonus pts", ka: "bonus", fmt: v => v },
+    { label: "GI per 90", ka: "gi_per90", fmt: v => v },
+    { label: "ICT index", ka: "ict_index", fmt: v => v },
+    { label: "Ownership", ka: "selected_pct", fmt: v => v + "%", neutral: true },
+    { label: "Value score", ka: "value_score", fmt: v => v + "/10" },
+    { label: "Consistency score", ka: "consistency_score", fmt: v => v + "/10" },
+    { label: "Mins reliability", ka: "mins_score", fmt: v => v + "/10" },
+    { label: "Form score", ka: "form_score", fmt: v => v + "/10" },
+    { label: "Overall score", ka: "overall", fmt: v => v + "/10" },
+  ];
+
+  let aWins = 0, bWins = 0;
+  const rows = metrics.map(m => {
+    const av = a[m.ka], bv = b[m.ka];
+    let aCls = "", bCls = "";
+    if (!m.neutral && av !== bv) {
+      const aBetter = m.lowerBetter ? av < bv : av > bv;
+      aCls = aBetter ? "winner" : "loser";
+      bCls = aBetter ? "loser" : "winner";
+      if (aBetter) aWins++; else bWins++;
+    }
+    return `<div class="metric-row">
+      <div class="metric-val ${aCls}" style="min-width:80px">${m.fmt(av)}</div>
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-val ${bCls}" style="min-width:80px;text-align:right">${m.fmt(bv)}</div>
+    </div>`;
+  }).join("");
+
+  const winner = aWins > bWins ? a : bWins > aWins ? b : null;
+  const verdict = winner
+    ? `<span class="badge bg">${winner.name} wins ${Math.max(aWins,bWins)}–${Math.min(aWins,bWins)}</span>`
+    : `<span class="badge ba">Too close to call</span>`;
+
+  el.innerHTML = `
+    <div style="display:flex;gap:1rem;margin-bottom:1rem;text-align:center">
+      <div class="compare-header" style="flex:1">
+        <div style="font-size:16px;font-weight:600">${a.name} ${aWins > bWins ? "🏆" : ""}</div>
+        <div style="font-size:12px;color:var(--mu);margin-top:2px">${a.team_full} · ${a.pos} · £${a.cost.toFixed(1)}m</div>
+        <div style="margin-top:8px"><span class="overall-score ${osClass(a.overall)}" style="width:44px;height:44px;font-size:16px">${a.overall}</span></div>
+      </div>
+      <div style="display:flex;align-items:center;font-size:13px;color:var(--mu);padding:0 8px">vs</div>
+      <div class="compare-header" style="flex:1">
+        <div style="font-size:16px;font-weight:600">${b.name} ${bWins > aWins ? "🏆" : ""}</div>
+        <div style="font-size:12px;color:var(--mu);margin-top:2px">${b.team_full} · ${b.pos} · £${b.cost.toFixed(1)}m</div>
+        <div style="margin-top:8px"><span class="overall-score ${osClass(b.overall)}" style="width:44px;height:44px;font-size:16px">${b.overall}</span></div>
+      </div>
+    </div>
+    <div style="margin-bottom:12px;text-align:center">${verdict}</div>
+    ${rows}`;
+}
+
+function runTransferCheck() {
+  if (!tcIn || !tcOut) { document.getElementById("tc-result").innerHTML = '<p style="color:var(--rtx);font-size:13px;margin-top:8px">Please select both players first.</p>'; return; }
+  const isFree = document.getElementById("tc-free").value === "1";
+  const reason = document.getElementById("tc-reason").value;
+  const inn = tcIn, out = tcOut;
+  const checks = [];
+  let score = 0, maxScore = 0;
+
+  maxScore += 2;
+  if (inn.form > out.form + 1) { checks.push({ icon:"✓", cls:"check-yes", label:"Better form", detail:`${inn.name} form ${inn.form} vs ${out.name} form ${out.form}` }); score += 2; }
+  else if (inn.form >= out.form - 0.5) { checks.push({ icon:"!", cls:"check-warn", label:"Similar form", detail:`${inn.name} ${inn.form} vs ${out.name} ${out.form} — marginal difference` }); score += 1; }
+  else { checks.push({ icon:"✗", cls:"check-no", label:"Worse form", detail:`${inn.name} form ${inn.form} is lower than ${out.name} ${out.form} — are you sure?` }); }
+
+  maxScore += 2;
+  if (inn.pts_per_game > out.pts_per_game + 0.5) { checks.push({ icon:"✓", cls:"check-yes", label:"Higher pts per game", detail:`${inn.name} averaging ${inn.pts_per_game} vs ${out.name} ${out.pts_per_game} pts/GW` }); score += 2; }
+  else if (inn.pts_per_game >= out.pts_per_game - 0.3) { checks.push({ icon:"!", cls:"check-warn", label:"Similar pts per game", detail:`${inn.name} ${inn.pts_per_game} vs ${out.name} ${out.pts_per_game} — not a significant upgrade` }); score += 1; }
+  else { checks.push({ icon:"✗", cls:"check-no", label:"Lower pts per game", detail:`${inn.name} averages fewer pts/GW — why are you buying?` }); }
+
+  maxScore += 1;
+  if (inn.mins_pct >= 70) { checks.push({ icon:"✓", cls:"check-yes", label:"Reliable starter", detail:`${inn.name} has played ${inn.mins_pct}% of possible minutes` }); score += 1; }
+  else if (inn.mins_pct >= 50) { checks.push({ icon:"!", cls:"check-warn", label:"Some rotation risk", detail:`${inn.name} has played ${inn.mins_pct}% of minutes — monitor their usage` }); score += 0.5; }
+  else { checks.push({ icon:"✗", cls:"check-no", label:"Rotation risk", detail:`${inn.name} has only played ${inn.mins_pct}% of minutes — high risk` }); }
+
+  maxScore += 1;
+  if (inn.value >= out.value) { checks.push({ icon:"✓", cls:"check-yes", label:"Better or equal value", detail:`${inn.name} ${inn.value} pts/£m vs ${out.name} ${out.value} pts/£m` }); score += 1; }
+  else { checks.push({ icon:"!", cls:"check-warn", label:"Slightly worse value", detail:`${inn.name} ${inn.value} pts/£m vs ${out.name} ${out.value} pts/£m — make sure fixtures justify it` }); score += 0.5; }
+
+  maxScore += 1;
+  if (inn.status === "a") { checks.push({ icon:"✓", cls:"check-yes", label:"Fully fit", detail:`No injury or availability concerns for ${inn.name}` }); score += 1; }
+  else { checks.push({ icon:"✗", cls:"check-no", label:"Fitness concern", detail:`${inn.name} status: ${inn.status}. ${inn.news}` }); }
+
+  maxScore += 1;
+  if (reason === "reactive") { checks.push({ icon:"✗", cls:"check-no", label:"⚠ Reactive transfer warning", detail:"You've said this is after a bad GW. Apply the 24-hour rule — wait until tomorrow before confirming." }); }
+  else if (reason === "planned" || reason === "upgrade") { checks.push({ icon:"✓", cls:"check-yes", label:"Planned transfer", detail:"Good — this appears to be a considered decision rather than a reaction." }); score += 1; }
+  else { checks.push({ icon:"!", cls:"check-warn", label:"Check your motivation", detail:"Make sure this isn't a reactive move. Revisit your reasoning tomorrow if unsure." }); score += 0.5; }
+
+  if (!isFree) {
+    maxScore += 1;
+    const ptsDiff = (inn.pts_per_game - out.pts_per_game) * 5;
+    if (ptsDiff > 4) { checks.push({ icon:"✓", cls:"check-yes", label:"Hit likely justified", detail:`Projected +${ptsDiff.toFixed(1)} pts over 5 GWs — covers the 4pt hit` }); score += 1; }
+    else { checks.push({ icon:"✗", cls:"check-no", label:"Hit may not be worth it", detail:`Only +${ptsDiff.toFixed(1)} pts projected over 5 GWs — 4pt hit is hard to recover` }); }
+  }
+
+  const pct = score / maxScore;
+  const resultCls = pct >= 0.7 ? "decision-go" : pct >= 0.4 ? "decision-maybe" : "decision-hold";
+  const resultText = pct >= 0.7 ? "✓ Go ahead with the transfer" : pct >= 0.4 ? "⚠ Proceed with caution" : "✗ Consider holding — the data doesn't strongly support this transfer";
+
+  document.getElementById("tc-result").innerHTML = `
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+      <div class="compare-header" style="flex:1"><div style="font-size:15px;font-weight:600"><span class="badge bg">IN</span> ${inn.name}</div><div style="font-size:12px;color:var(--mu);margin-top:2px">${inn.team_full} · ${inn.pos} · £${inn.cost.toFixed(1)}m · ${inn.pts_per_game} pts/GW</div></div>
+      <div class="compare-header" style="flex:1"><div style="font-size:15px;font-weight:600"><span class="badge br">OUT</span> ${out.name}</div><div style="font-size:12px;color:var(--mu);margin-top:2px">${out.team_full} · ${out.pos} · £${out.cost.toFixed(1)}m · ${out.pts_per_game} pts/GW</div></div>
+    </div>
+    ${checks.map(c => `<div class="checklist-item"><div class="check-icon ${c.cls}">${c.icon}</div><div><div class="check-label">${c.label}</div><div class="check-detail">${c.detail}</div></div></div>`).join("")}
+    <div class="decision-result ${resultCls}"><strong>${resultText}</strong><div style="font-size:12px;margin-top:4px;opacity:.8">Score: ${Math.round(score)}/${maxScore} checks passed</div></div>`;
+}
+
+function show(s, btn) {
+  document.querySelectorAll(".section").forEach(e => e.classList.remove("on"));
+  document.querySelectorAll(".nav button").forEach(e => e.classList.remove("on"));
+  document.getElementById("s-" + s).classList.add("on");
+  btn.classList.add("on");
+}
+
+document.addEventListener("click", e => {
+  if (!e.target.closest(".search-wrap")) document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
+});
+
+loadData();
+</script>
+</body>
+</html>
