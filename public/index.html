@@ -100,6 +100,7 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
     <button onclick="show('compare',this)">Compare players</button>
     <button onclick="show('transfer',this)">Transfer checker</button>
     <button onclick="show('checklists',this)">Decision checklists</button>
+    <button onclick="show('value',this)">Value tracker</button>
   </div>
 
   <!-- MY TEAM -->
@@ -219,6 +220,88 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
 
       <div id="tc-summary" style="margin-top:1rem"></div>
       <div id="tc-result"></div>
+    </div>
+  </div>
+
+  <!-- VALUE TRACKER -->
+  <div id="s-value" class="section">
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:1rem" id="vt-metrics" style="display:none"></div>
+
+    <div class="card">
+      <p class="lbl">Price change watchlist</p>
+      <p style="font-size:13px;color:var(--mu);margin-bottom:1rem">Players rising or falling in price based on transfer activity this gameweek. Sorted by transfer momentum.</p>
+
+      <div class="filters" style="margin-bottom:1rem">
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Position</label>
+          <select id="vt-pos" onchange="renderValueTable()">
+            <option value="">All</option>
+            <option value="GK">GK</option>
+            <option value="DEF">DEF</option>
+            <option value="MID">MID</option>
+            <option value="FWD">FWD</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Max price (£m)</label>
+          <input type="number" id="vt-maxcost" placeholder="e.g. 8.0" step="0.5" style="width:110px" oninput="renderValueTable()">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Show</label>
+          <select id="vt-filter" onchange="renderValueTable()">
+            <option value="all">All players</option>
+            <option value="rising">Rising only</option>
+            <option value="falling">Falling only</option>
+            <option value="risked">At risk of drop</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Search</label>
+          <input type="text" id="vt-search" placeholder="Player name..." style="width:150px" oninput="renderValueTable()">
+        </div>
+      </div>
+
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th onclick="vtSortBy('name')">Player</th>
+          <th onclick="vtSortBy('pos')">Pos</th>
+          <th onclick="vtSortBy('team')">Club</th>
+          <th onclick="vtSortBy('cost')">Price</th>
+          <th onclick="vtSortBy('cost_change')">Change</th>
+          <th onclick="vtSortBy('transfers_in')">Transfers in</th>
+          <th onclick="vtSortBy('transfers_out')">Transfers out</th>
+          <th onclick="vtSortBy('net_transfers')">Net moves</th>
+          <th onclick="vtSortBy('selected_pct')">Ownership</th>
+          <th onclick="vtSortBy('form')">Form</th>
+          <th onclick="vtSortBy('pts_per_game')">Pts/GW</th>
+          <th>Verdict</th>
+        </tr></thead>
+        <tbody id="vt-tbody"></tbody>
+      </table>
+      </div>
+      <p style="font-size:12px;color:var(--hi);margin-top:10px">
+        Showing top 150 · Net moves = transfers in minus transfers out this GW · Price change = vs start of season
+      </p>
+    </div>
+
+    <div class="card">
+      <p class="lbl">How FPL price changes work</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:14px">
+          <p style="font-weight:500;margin-bottom:6px">When prices rise</p>
+          <p style="font-size:13px;color:var(--mu)">A player's price rises when more managers buy than sell. The threshold is roughly net +1,000 transfers. Prices rise by £0.1m at a time.</p>
+        </div>
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:14px">
+          <p style="font-weight:500;margin-bottom:6px">Selling profit rule</p>
+          <p style="font-size:13px;color:var(--mu)">If you bought a player at £7.0m and they're now £7.4m, you sell for £7.2m — you keep half the rise, rounded down to the nearest £0.1m.</p>
+        </div>
+        <div style="background:var(--sf2);border-radius:var(--rs);padding:14px">
+          <p style="font-weight:500;margin-bottom:6px">Strategy tip</p>
+          <p style="font-size:13px;color:var(--mu)">Buy rising players early — before the price moves. Sell before a run of hard fixtures to lock in profit. Never sell just after a price rise if another rise looks likely.</p>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -956,12 +1039,117 @@ async function loadMyTeam() {
   }
 }
 
+
+// ── Value Tracker ─────────────────────────────────────
+let vtSortCol = "net_transfers", vtSortDir = -1;
+
+function renderValueTable() {
+  const pos     = document.getElementById("vt-pos").value;
+  const maxCost = parseFloat(document.getElementById("vt-maxcost").value) || 999;
+  const filter  = document.getElementById("vt-filter").value;
+  const search  = document.getElementById("vt-search").value.toLowerCase();
+
+  let pool = PLAYERS.map(p => ({
+    ...p,
+    net_transfers: (p.transfers_in || 0) - (p.transfers_out || 0),
+  }));
+
+  // Apply filters
+  pool = pool.filter(p =>
+    (!pos || p.pos === pos) &&
+    p.cost <= maxCost &&
+    (!search || p.name.toLowerCase().includes(search) || p.full_name.toLowerCase().includes(search))
+  );
+
+  if (filter === "rising")  pool = pool.filter(p => p.net_transfers > 0);
+  if (filter === "falling") pool = pool.filter(p => p.net_transfers < 0);
+  if (filter === "risked")  pool = pool.filter(p => p.transfers_out > 50000);
+
+  // Sort
+  pool.sort((a, b) => {
+    const av = a[vtSortCol], bv = b[vtSortCol];
+    if (typeof av === "number") return vtSortDir * (bv - av);
+    return vtSortDir * (""+bv).localeCompare(""+av);
+  });
+
+  const top = pool.slice(0, 150);
+
+  function fmtNum(n) {
+    if (!n) return "—";
+    if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1)+"M";
+    if (Math.abs(n) >= 1000) return (n/1000).toFixed(0)+"k";
+    return n.toLocaleString();
+  }
+
+  function verdictBadge(p) {
+    const net = p.net_transfers;
+    const absNet = Math.abs(net);
+
+    if (net > 500000)  return `<span class="badge bg">🚀 Hot — buy now</span>`;
+    if (net > 200000)  return `<span class="badge bg">↑ Rising fast</span>`;
+    if (net > 50000)   return `<span class="badge bt">↑ Rising</span>`;
+    if (net > 0)       return `<span class="badge bt">Slight rise</span>`;
+    if (net < -500000) return `<span class="badge br">🔻 Sell now</span>`;
+    if (net < -200000) return `<span class="badge br">↓ Falling fast</span>`;
+    if (net < -50000)  return `<span class="badge ba">↓ At risk</span>`;
+    if (net < 0)       return `<span class="badge ba">Slight drop</span>`;
+    return `<span style="color:var(--hi);font-size:12px">Stable</span>`;
+  }
+
+  function changeBadge(c) {
+    if (!c) return '<span style="color:var(--hi);font-size:12px">—</span>';
+    if (c > 0) return `<span class="badge bg">+£${c.toFixed(1)}m</span>`;
+    return `<span class="badge br">-£${Math.abs(c).toFixed(1)}m</span>`;
+  }
+
+  function netBadge(n) {
+    if (!n) return '<span style="color:var(--hi)">0</span>';
+    const cls = n > 0 ? "color:var(--gtx)" : "color:var(--rtx)";
+    return `<span style="font-weight:500;${cls}">${n > 0 ? "+" : ""}${fmtNum(n)}</span>`;
+  }
+
+  document.getElementById("vt-tbody").innerHTML = top.map(p => `
+    <tr>
+      <td><span style="font-weight:500">${p.name}</span>${p.status !== "a" ? ` <span class="badge br" style="font-size:10px">${p.status === "i" ? "Inj" : p.status === "d" ? "Doubt" : "Sus"}</span>` : ""}</td>
+      <td><span class="badge ${posClass(p.pos)}">${p.pos}</span></td>
+      <td style="color:var(--mu)">${p.team}</td>
+      <td>£${p.cost.toFixed(1)}m</td>
+      <td>${changeBadge(p.cost_change)}</td>
+      <td style="color:var(--gtx)">${fmtNum(p.transfers_in)}</td>
+      <td style="color:var(--rtx)">${fmtNum(p.transfers_out)}</td>
+      <td>${netBadge(p.net_transfers)}</td>
+      <td>${p.selected_pct}%</td>
+      <td>${p.form}</td>
+      <td>${p.pts_per_game}</td>
+      <td>${verdictBadge(p)}</td>
+    </tr>`).join("");
+
+  // Update summary metrics
+  const rising = PLAYERS.filter(p => (p.transfers_in - p.transfers_out) > 50000).length;
+  const falling = PLAYERS.filter(p => (p.transfers_out - p.transfers_in) > 50000).length;
+  const hottest = [...PLAYERS].sort((a,b) => (b.transfers_in - b.transfers_out) - (a.transfers_in - a.transfers_out))[0];
+  const coldest = [...PLAYERS].sort((a,b) => (a.transfers_in - a.transfers_out) - (b.transfers_in - b.transfers_out))[0];
+
+  document.getElementById("vt-metrics").style.display = "grid";
+  document.getElementById("vt-metrics").innerHTML = `
+    <div class="metric"><div class="ml">Rising players</div><div class="mv" style="color:var(--gtx)">${rising}</div><div class="ms">net positive transfers</div></div>
+    <div class="metric"><div class="ml">Falling players</div><div class="mv" style="color:var(--rtx)">${falling}</div><div class="ms">net negative transfers</div></div>
+    <div class="metric"><div class="ml">Most bought</div><div class="mv" style="font-size:16px">${hottest ? hottest.name : "—"}</div><div class="ms">${hottest ? "+"+fmtNum(hottest.transfers_in - hottest.transfers_out)+" net" : ""}</div></div>
+    <div class="metric"><div class="ml">Most sold</div><div class="mv" style="font-size:16px">${coldest ? coldest.name : "—"}</div><div class="ms">${coldest ? fmtNum(coldest.transfers_in - coldest.transfers_out)+" net" : ""}</div></div>`;
+}
+
+function vtSortBy(col) {
+  if (vtSortCol === col) vtSortDir *= -1; else { vtSortCol = col; vtSortDir = -1; }
+  renderValueTable();
+}
+
 function show(s, btn) {
   document.querySelectorAll(".section").forEach(e => e.classList.remove("on"));
   document.querySelectorAll(".nav button").forEach(e => e.classList.remove("on"));
   document.getElementById("s-" + s).classList.add("on");
   btn.classList.add("on");
   if (s === "transfer" && tcRows.length === 0) initTransferTab();
+  if (s === "value") renderValueTable();
 }
 
 document.addEventListener("click", e => {
