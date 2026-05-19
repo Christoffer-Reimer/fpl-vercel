@@ -46,7 +46,7 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--sf2)}
 .dropdown-item:last-child{border-bottom:none}
 .dropdown-item:hover{background:var(--sf2)}
 .overall-score{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:13px;font-weight:700}
-.os-great{background:var(--gbg);color:var(--gtx)} .os-good{background:var(--bbg);color:var(--btx)}
+.os-great{background:var(--gbg);color:var(--gtx)} .ml{font-size:12px;color:var(--mu);margin-bottom:4px} .mv{font-size:24px;font-weight:600;line-height:1.1} .os-good{background:var(--bbg);color:var(--btx)}
 .os-avg{background:var(--abg);color:var(--atx)} .os-poor{background:var(--rbg);color:var(--rtx)}
 .pos-gk{background:#faeeda;color:#854f0b} .pos-def{background:#e6f1fb;color:#185fa5}
 .pos-mid{background:#eaf3de;color:#3b6d11} .pos-fwd{background:#fcebeb;color:#a32d2d}
@@ -95,10 +95,27 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
 
 <div id="main-content" style="display:none">
   <div class="nav">
+    <button onclick="show('myteam',this)">My team</button>
     <button class="on" onclick="show('rankings',this)">Player rankings</button>
     <button onclick="show('compare',this)">Compare players</button>
     <button onclick="show('transfer',this)">Transfer checker</button>
     <button onclick="show('checklists',this)">Decision checklists</button>
+  </div>
+
+  <!-- MY TEAM -->
+  <div id="s-myteam" class="section">
+    <div class="card">
+      <p class="lbl">Your squad</p>
+      <p style="font-size:13px;color:var(--mu);margin-bottom:1rem">Live view of your current 15-player squad with performance scores and budget overview.</p>
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:1.25rem;flex-wrap:wrap">
+        <div>
+          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">FPL Team ID</label>
+          <input type="number" id="team-id-input" placeholder="123456" style="width:140px">
+        </div>
+        <button onclick="loadMyTeam()" style="padding:8px 20px;border-radius:var(--rs);border:.5px solid var(--btx);background:var(--bbg);color:var(--btx);cursor:pointer;font-size:13px;font-weight:500">Load team →</button>
+      </div>
+      <div id="myteam-result"></div>
+    </div>
   </div>
 
   <!-- RANKINGS -->
@@ -596,6 +613,122 @@ function runTransferCheck() {
     </div>
     ${checks.map(c => `<div class="checklist-item"><div class="check-icon ${c.cls}">${c.icon}</div><div><div class="check-label">${c.label}</div><div class="check-detail">${c.detail}</div></div></div>`).join("")}
     <div class="decision-result ${resultCls}"><strong>${resultText}</strong><div style="font-size:12px;margin-top:4px;opacity:.8">Score: ${Math.round(score)}/${maxScore} checks passed</div></div>`;
+}
+
+
+async function loadMyTeam() {
+  const teamId = document.getElementById("team-id-input").value;
+  if (!teamId) {
+    document.getElementById("myteam-result").innerHTML = '<p style="color:var(--rtx);font-size:13px">Please enter your FPL team ID first. You can find it in the URL when viewing your team on the FPL website.</p>';
+    return;
+  }
+  const el = document.getElementById("myteam-result");
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:1rem 0;color:var(--mu);font-size:13px"><div class="spinner" style="width:20px;height:20px;border-width:2px"></div> Loading your squad...</div>`;
+
+  try {
+    // Fetch entry info and current GW picks in parallel
+    const [entryRes, histRes] = await Promise.all([
+      fetch(`${API_BASE}?endpoint=entry/${teamId}/`),
+      fetch(`${API_BASE}?endpoint=entry/${teamId}/history/`),
+    ]);
+
+    if (!entryRes.ok) throw new Error("Could not load team — check your team ID");
+    const entry = await entryRes.json();
+    const history = await histRes.json();
+
+    const currentGW = history.current && history.current.length > 0
+      ? history.current[history.current.length - 1].event
+      : 37;
+
+    const picksRes = await fetch(`${API_BASE}?endpoint=entry/${teamId}/event/${currentGW}/picks/`);
+    if (!picksRes.ok) throw new Error("Could not load GW picks");
+    const picksData = await picksRes.json();
+
+    const picks = picksData.picks || [];
+    const bank = (picksData.entry_history?.bank || 0) / 10;
+    const teamValue = (picksData.entry_history?.value || 0) / 10;
+
+    // Map picks to player data
+    const squad = picks.map(pick => {
+      const player = PLAYERS.find(p => p.id === pick.element);
+      if (!player) return null;
+      return {
+        ...player,
+        position: pick.position,
+        multiplier: pick.multiplier,
+        is_captain: pick.is_captain,
+        is_vice_captain: pick.is_vice_captain,
+        is_starting: pick.position <= 11,
+      };
+    }).filter(Boolean);
+
+    const starters = squad.filter(p => p.is_starting).sort((a,b) => a.position - b.position);
+    const bench = squad.filter(p => !p.is_starting).sort((a,b) => a.position - b.position);
+
+    // Summary metrics
+    const avgScore = squad.length > 0 ? (squad.reduce((s,p) => s+p.overall, 0) / squad.length).toFixed(1) : 0;
+    const weakest = [...squad].sort((a,b) => a.overall - b.overall).slice(0,3);
+    const strongest = [...squad].sort((a,b) => b.overall - a.overall).slice(0,3);
+
+    function playerRow(p) {
+      const capBadge = p.is_captain ? `<span class="badge bp" style="font-size:10px">C</span>` :
+                       p.is_vice_captain ? `<span class="badge bt" style="font-size:10px">VC</span>` : "";
+      const statusB = p.status === "i" ? `<span class="badge br" style="font-size:10px">Inj</span>` :
+                      p.status === "d" ? `<span class="badge ba" style="font-size:10px">Doubt</span>` : "";
+      return `<tr>
+        <td><span style="font-weight:500">${p.name}</span> ${capBadge} ${statusB}
+          ${p.news ? `<span style="font-size:11px;color:var(--mu);display:block">${p.news.substring(0,50)}</span>` : ""}
+        </td>
+        <td><span class="badge ${posClass(p.pos)}">${p.pos}</span></td>
+        <td style="color:var(--mu)">${p.team}</td>
+        <td>£${p.cost.toFixed(1)}m</td>
+        <td style="font-weight:500">${p.pts_per_game}</td>
+        <td>${p.form}</td>
+        <td>${p.mins_pct}%</td>
+        <td><div class="score-bar"><div class="bar-track"><div class="bar-fill" style="width:${p.overall*10}%;background:${barColor(p.overall)}"></div></div><span class="overall-score ${osClass(p.overall)}" style="width:28px;height:28px;font-size:11px">${p.overall}</span></div></td>
+      </tr>`;
+    }
+
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:1.25rem">
+        <div class="metric"><div class="ml">Team</div><div class="mv" style="font-size:16px">${entry.name || "—"}</div></div>
+        <div class="metric"><div class="ml">GW</div><div class="mv">${currentGW}</div></div>
+        <div class="metric"><div class="ml">Team value</div><div class="mv">£${teamValue.toFixed(1)}m</div></div>
+        <div class="metric"><div class="ml">Bank</div><div class="mv">£${bank.toFixed(1)}m</div></div>
+        <div class="metric"><div class="ml">Squad avg score</div><div class="mv">${avgScore}<span style="font-size:13px;font-weight:400">/10</span></div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+        <div style="background:var(--gbg);border-radius:var(--rs);padding:12px 14px">
+          <p class="lbl" style="color:var(--gtx);margin-bottom:8px">Strongest players</p>
+          ${strongest.map(p => `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${p.name} <span style="color:var(--mu);font-size:11px">${p.pos}</span></span><span class="overall-score ${osClass(p.overall)}" style="width:24px;height:24px;font-size:11px">${p.overall}</span></div>`).join("")}
+        </div>
+        <div style="background:var(--rbg);border-radius:var(--rs);padding:12px 14px">
+          <p class="lbl" style="color:var(--rtx);margin-bottom:8px">Weakest players</p>
+          ${weakest.map(p => `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${p.name} <span style="color:var(--mu);font-size:11px">${p.pos}</span></span><span class="overall-score ${osClass(p.overall)}" style="width:24px;height:24px;font-size:11px">${p.overall}</span></div>`).join("")}
+        </div>
+      </div>
+
+      <p class="lbl">Starting XI</p>
+      <div style="overflow-x:auto;margin-bottom:1rem">
+      <table>
+        <thead><tr><th>Player</th><th>Pos</th><th>Club</th><th>Price</th><th>Pts/GW</th><th>Form</th><th>Mins %</th><th>Score</th></tr></thead>
+        <tbody>${starters.map(playerRow).join("")}</tbody>
+      </table>
+      </div>
+
+      <p class="lbl">Bench</p>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Player</th><th>Pos</th><th>Club</th><th>Price</th><th>Pts/GW</th><th>Form</th><th>Mins %</th><th>Score</th></tr></thead>
+        <tbody>${bench.map(playerRow).join("")}</tbody>
+      </table>
+      </div>
+    `;
+
+  } catch(e) {
+    el.innerHTML = `<div class="error-box"><strong>Could not load team</strong><br><span style="font-size:13px">${e.message}</span></div>`;
+  }
 }
 
 function show(s, btn) {
