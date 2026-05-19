@@ -1,25 +1,22 @@
 export default async function handler(req, res) {
-  // Allow all origins
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
   const { endpoint } = req.query;
-  if (!endpoint) {
-    return res.status(400).json({ error: "Missing endpoint parameter" });
-  }
+  if (!endpoint) return res.status(400).json({ error: "Missing endpoint parameter" });
 
-  const allowed = [
-    "bootstrap-static/",
+  const allowedPatterns = [
+    /^bootstrap-static\/$/,
+    /^entry\/\d+\/$/,
+    /^entry\/\d+\/event\/\d+\/picks\/$/,
+    /^entry\/\d+\/history\/$/,
   ];
 
-  if (!allowed.includes(endpoint)) {
-    return res.status(403).json({ error: "Endpoint not allowed" });
-  }
+  const isAllowed = allowedPatterns.some(p => p.test(endpoint));
+  if (!isAllowed) return res.status(403).json({ error: "Endpoint not allowed" });
 
   try {
     const fplRes = await fetch(
@@ -35,14 +32,10 @@ export default async function handler(req, res) {
       }
     );
 
-    if (!fplRes.ok) {
-      return res.status(fplRes.status).json({ error: `FPL API returned ${fplRes.status}` });
-    }
+    if (!fplRes.ok) return res.status(fplRes.status).json({ error: `FPL API returned ${fplRes.status}` });
 
     const data = await fplRes.json();
-
-    // Cache for 1 hour
-    res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate");
+    res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate");
     return res.status(200).json(data);
 
   } catch (err) {
