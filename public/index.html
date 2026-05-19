@@ -195,45 +195,29 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
 
   <!-- TRANSFER CHECKER -->
   <div id="s-transfer" class="section">
+    <div class="card" id="tc-team-banner" style="background:var(--bbg);border-color:var(--btx);display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <p style="font-size:13px;font-weight:500;color:var(--btx)" id="tc-team-name"></p>
+          <p style="font-size:12px;color:var(--btx);opacity:.8" id="tc-team-budget"></p>
+        </div>
+        <span class="badge bb">Team loaded — Player OUT shows your squad only</span>
+      </div>
+    </div>
+
     <div class="card">
-      <p class="lbl">Transfer decision checker</p>
-      <p style="font-size:13px;color:var(--mu);margin-bottom:1rem">Select the player you want to buy and the player you want to sell. Get a data-backed recommendation.</p>
-      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
-        <div style="flex:1;min-width:220px">
-          <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Player IN <span class="badge bg">buying</span></p>
-          <div class="search-wrap">
-            <input type="text" id="tc-in-input" placeholder="Search player to buy..." oninput="searchPlayer('tc-in')" autocomplete="off">
-            <div class="dropdown" id="tc-in-drop"></div>
-          </div>
-        </div>
-        <div style="flex:1;min-width:220px">
-          <p style="font-size:12px;color:var(--mu);margin-bottom:6px">Player OUT <span class="badge br">selling</span></p>
-          <div class="search-wrap">
-            <input type="text" id="tc-out-input" placeholder="Search player to sell..." oninput="searchPlayer('tc-out')" autocomplete="off">
-            <div class="dropdown" id="tc-out-drop"></div>
-          </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+        <p class="lbl" style="margin-bottom:0">Transfer planner</p>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:12px;color:var(--mu)" id="tc-transfers-left"></span>
+          <button onclick="addTransferRow()" id="tc-add-btn" style="padding:5px 14px;border-radius:var(--rs);border:.5px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer;font-size:13px">+ Add transfer</button>
+          <button onclick="analyseAllTransfers()" style="padding:6px 18px;border-radius:var(--rs);border:.5px solid var(--btx);background:var(--bbg);color:var(--btx);cursor:pointer;font-size:13px;font-weight:500">Analyse all →</button>
         </div>
       </div>
-      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:flex-end">
-        <div>
-          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Free transfer?</label>
-          <select id="tc-free">
-            <option value="1">Yes — free transfer</option>
-            <option value="0">No — costs 4 pts hit</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:12px;color:var(--mu);display:block;margin-bottom:4px">Reason for transfer</label>
-          <select id="tc-reason" style="width:220px">
-            <option value="planned">Planned (fixtures/form driven)</option>
-            <option value="injury">Injury/suspension cover</option>
-            <option value="reactive">After a bad gameweek</option>
-            <option value="upgrade">Upgrading to better player</option>
-            <option value="downgrade">Freeing up funds</option>
-          </select>
-        </div>
-        <button onclick="runTransferCheck()" style="padding:8px 20px;border-radius:var(--rs);border:.5px solid var(--btx);background:var(--bbg);color:var(--btx);cursor:pointer;font-size:13px;font-weight:500">Analyse →</button>
-      </div>
+
+      <div id="tc-rows"></div>
+
+      <div id="tc-summary" style="margin-top:1rem"></div>
       <div id="tc-result"></div>
     </div>
   </div>
@@ -314,6 +298,12 @@ let PLAYERS = [];
 let sortCol = "overall", sortDir = -1;
 let compareA = null, compareB = null;
 let tcIn = null, tcOut = null;
+// Multi-transfer state
+let tcRows = []; // array of {id, playerIn, playerOut, isFree, reason}
+let tcNextId = 0;
+let mySquad = []; // set when My Team is loaded
+let myBank = 0;
+let myTeamName = "";
 
 async function loadData() {
   document.getElementById("loading").style.display = "flex";
@@ -472,12 +462,25 @@ function clearFilters() {
 }
 
 function searchPlayer(slot) {
-  const ids = { a: ["cmp-a-input","cmp-a-drop"], b: ["cmp-b-input","cmp-b-drop"], "tc-in": ["tc-in-input","tc-in-drop"], "tc-out": ["tc-out-input","tc-out-drop"] };
-  const [inputId, dropId] = ids[slot];
+  let inputId, dropId;
+  if (slot.startsWith("tc-in-") || slot.startsWith("tc-out-")) {
+    inputId = slot + "-input";
+    dropId  = slot + "-drop";
+  } else {
+    const ids = { a: ["cmp-a-input","cmp-a-drop"], b: ["cmp-b-input","cmp-b-drop"], "tc-in": ["tc-in-input","tc-in-drop"], "tc-out": ["tc-out-input","tc-out-drop"] };
+    [inputId, dropId] = ids[slot];
+  }
   const q = document.getElementById(inputId).value.toLowerCase();
   const drop = document.getElementById(dropId);
   if (q.length < 2) { drop.classList.remove("open"); return; }
   const matches = PLAYERS.filter(p => p.name.toLowerCase().includes(q) || p.full_name.toLowerCase().includes(q)).slice(0, 8);
+  // If slot is an OUT slot and squad is loaded, restrict to squad
+  let pool = PLAYERS;
+  if (slot.startsWith("tc-out-") && mySquad.length > 0) {
+    const squadIds = mySquad.map(p => p.id);
+    pool = PLAYERS.filter(p => squadIds.includes(p.id));
+  }
+  const matches = pool.filter(p => p.name.toLowerCase().includes(q) || p.full_name.toLowerCase().includes(q)).slice(0, 8);
   drop.innerHTML = matches.map(p => `<div class="dropdown-item" onclick="selectPlayer('${slot}',${p.id})">${p.name} <span style="color:var(--mu);font-size:11px">${p.team} · ${p.pos} · £${p.cost.toFixed(1)}m</span></div>`).join("");
   drop.classList.add("open");
 }
@@ -485,12 +488,21 @@ function searchPlayer(slot) {
 function selectPlayer(slot, id) {
   const p = PLAYERS.find(x => x.id === id);
   if (!p) return;
-  const ids = { a: ["cmp-a-input","cmp-a-drop"], b: ["cmp-b-input","cmp-b-drop"], "tc-in": ["tc-in-input","tc-in-drop"], "tc-out": ["tc-out-input","tc-out-drop"] };
-  const [inputId, dropId] = ids[slot];
+  let inputId, dropId;
+  if (slot.startsWith("tc-in-") || slot.startsWith("tc-out-")) {
+    inputId = slot + "-input";
+    dropId  = slot + "-drop";
+  } else {
+    const ids = { a: ["cmp-a-input","cmp-a-drop"], b: ["cmp-b-input","cmp-b-drop"], "tc-in": ["tc-in-input","tc-in-drop"], "tc-out": ["tc-out-input","tc-out-drop"] };
+    [inputId, dropId] = ids[slot];
+  }
   document.getElementById(inputId).value = `${p.name} (${p.team})`;
   document.getElementById(dropId).classList.remove("open");
   if (slot === "a") { compareA = p; renderCompare(); }
   else if (slot === "b") { compareB = p; renderCompare(); }
+  else if (slot.startsWith("tc-in-")) { const rowId = parseInt(slot.split("-")[2]); setTransferPlayer(rowId, "in", p); }
+  else if (slot.startsWith("tc-out-")) { const rowId = parseInt(slot.split("-")[2]); setTransferPlayer(rowId, "out", p); }
+  // legacy single transfer (keep for backwards compat)
   else if (slot === "tc-in") tcIn = p;
   else tcOut = p;
 }
@@ -559,61 +571,265 @@ function renderCompare() {
     ${rows}`;
 }
 
-function runTransferCheck() {
-  if (!tcIn || !tcOut) { document.getElementById("tc-result").innerHTML = '<p style="color:var(--rtx);font-size:13px;margin-top:8px">Please select both players first.</p>'; return; }
-  const isFree = document.getElementById("tc-free").value === "1";
-  const reason = document.getElementById("tc-reason").value;
-  const inn = tcIn, out = tcOut;
-  const checks = [];
-  let score = 0, maxScore = 0;
+// ── Multi-transfer planner ───────────────────────────────
+function initTransferTab() {
+  tcRows = [];
+  tcNextId = 0;
+  document.getElementById("tc-rows").innerHTML = "";
+  document.getElementById("tc-summary").innerHTML = "";
+  document.getElementById("tc-result").innerHTML = "";
+  addTransferRow();
+  updateTransferBanner();
+}
 
-  maxScore += 2;
-  if (inn.form > out.form + 1) { checks.push({ icon:"✓", cls:"check-yes", label:"Better form", detail:`${inn.name} form ${inn.form} vs ${out.name} form ${out.form}` }); score += 2; }
-  else if (inn.form >= out.form - 0.5) { checks.push({ icon:"!", cls:"check-warn", label:"Similar form", detail:`${inn.name} ${inn.form} vs ${out.name} ${out.form} — marginal difference` }); score += 1; }
-  else { checks.push({ icon:"✗", cls:"check-no", label:"Worse form", detail:`${inn.name} form ${inn.form} is lower than ${out.name} ${out.form} — are you sure?` }); }
+function updateTransferBanner() {
+  const banner = document.getElementById("tc-team-banner");
+  if (mySquad.length > 0) {
+    banner.style.display = "block";
+    document.getElementById("tc-team-name").textContent = myTeamName + " — squad loaded";
+    document.getElementById("tc-team-budget").textContent = `Bank: £${myBank.toFixed(1)}m`;
+  } else {
+    banner.style.display = "none";
+  }
+  const leftEl = document.getElementById("tc-transfers-left");
+  if (leftEl) leftEl.textContent = `${tcRows.length}/5 transfer${tcRows.length !== 1 ? "s" : ""}`;
+}
 
-  maxScore += 2;
-  if (inn.pts_per_game > out.pts_per_game + 0.5) { checks.push({ icon:"✓", cls:"check-yes", label:"Higher pts per game", detail:`${inn.name} averaging ${inn.pts_per_game} vs ${out.name} ${out.pts_per_game} pts/GW` }); score += 2; }
-  else if (inn.pts_per_game >= out.pts_per_game - 0.3) { checks.push({ icon:"!", cls:"check-warn", label:"Similar pts per game", detail:`${inn.name} ${inn.pts_per_game} vs ${out.name} ${out.pts_per_game} — not a significant upgrade` }); score += 1; }
-  else { checks.push({ icon:"✗", cls:"check-no", label:"Lower pts per game", detail:`${inn.name} averages fewer pts/GW — why are you buying?` }); }
+function addTransferRow() {
+  if (tcRows.length >= 5) return;
+  const id = tcNextId++;
+  tcRows.push({ id, playerIn: null, playerOut: null, isFree: true, reason: "planned" });
 
-  maxScore += 1;
-  if (inn.mins_pct >= 70) { checks.push({ icon:"✓", cls:"check-yes", label:"Reliable starter", detail:`${inn.name} has played ${inn.mins_pct}% of possible minutes` }); score += 1; }
-  else if (inn.mins_pct >= 50) { checks.push({ icon:"!", cls:"check-warn", label:"Some rotation risk", detail:`${inn.name} has played ${inn.mins_pct}% of minutes — monitor their usage` }); score += 0.5; }
-  else { checks.push({ icon:"✗", cls:"check-no", label:"Rotation risk", detail:`${inn.name} has only played ${inn.mins_pct}% of minutes — high risk` }); }
+  const div = document.createElement("div");
+  div.id = `tc-row-${id}`;
+  div.style.cssText = "background:var(--sf2);border-radius:8px;padding:14px;margin-bottom:10px;position:relative";
 
-  maxScore += 1;
-  if (inn.value >= out.value) { checks.push({ icon:"✓", cls:"check-yes", label:"Better or equal value", detail:`${inn.name} ${inn.value} pts/£m vs ${out.name} ${out.value} pts/£m` }); score += 1; }
-  else { checks.push({ icon:"!", cls:"check-warn", label:"Slightly worse value", detail:`${inn.name} ${inn.value} pts/£m vs ${out.name} ${out.value} pts/£m — make sure fixtures justify it` }); score += 0.5; }
+  const outPlaceholder = mySquad.length > 0 ? "Your squad players..." : "Search player to sell...";
 
-  maxScore += 1;
-  if (inn.status === "a") { checks.push({ icon:"✓", cls:"check-yes", label:"Fully fit", detail:`No injury or availability concerns for ${inn.name}` }); score += 1; }
-  else { checks.push({ icon:"✗", cls:"check-no", label:"Fitness concern", detail:`${inn.name} status: ${inn.status}. ${inn.news}` }); }
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:12px;font-weight:600;color:var(--mu);text-transform:uppercase;letter-spacing:.05em">Transfer ${tcRows.length}</span>
+      <button onclick="removeTransferRow(${id})" style="font-size:12px;color:var(--mu);background:none;border:none;cursor:pointer;padding:2px 6px">✕ Remove</button>
+    </div>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:10px">
+      <div style="flex:1;min-width:180px">
+        <p style="font-size:12px;color:var(--mu);margin-bottom:4px">Player IN <span class="badge bg">buying</span></p>
+        <div class="search-wrap">
+          <input type="text" id="tc-in-${id}-input" placeholder="Search player to buy..." oninput="searchPlayer('tc-in-${id}')" autocomplete="off" style="width:100%">
+          <div class="dropdown" id="tc-in-${id}-drop"></div>
+        </div>
+        <div id="tc-in-${id}-selected" style="font-size:12px;color:var(--gtx);margin-top:4px;min-height:16px"></div>
+      </div>
+      <div style="flex:1;min-width:180px">
+        <p style="font-size:12px;color:var(--mu);margin-bottom:4px">Player OUT <span class="badge br">selling</span></p>
+        <div class="search-wrap">
+          <input type="text" id="tc-out-${id}-input" placeholder="${outPlaceholder}" oninput="searchPlayer('tc-out-${id}')" autocomplete="off" style="width:100%">
+          <div class="dropdown" id="tc-out-${id}-drop"></div>
+        </div>
+        <div id="tc-out-${id}-selected" style="font-size:12px;color:var(--rtx);margin-top:4px;min-height:16px"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <div>
+        <label style="font-size:11px;color:var(--mu);display:block;margin-bottom:3px">Free transfer?</label>
+        <select id="tc-free-${id}" onchange="updateRowMeta(${id})" style="font-size:12px;padding:5px 8px">
+          <option value="1">Yes — free</option>
+          <option value="0">No — 4pt hit</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--mu);display:block;margin-bottom:3px">Reason</label>
+        <select id="tc-reason-${id}" onchange="updateRowMeta(${id})" style="font-size:12px;padding:5px 8px;width:190px">
+          <option value="planned">Planned (fixtures/form)</option>
+          <option value="injury">Injury/suspension cover</option>
+          <option value="reactive">After a bad gameweek</option>
+          <option value="upgrade">Upgrading to better player</option>
+          <option value="downgrade">Freeing up funds</option>
+        </select>
+      </div>
+      <div id="tc-row-balance-${id}" style="font-size:12px;color:var(--mu);margin-top:16px"></div>
+    </div>`;
 
-  maxScore += 1;
-  if (reason === "reactive") { checks.push({ icon:"✗", cls:"check-no", label:"⚠ Reactive transfer warning", detail:"You've said this is after a bad GW. Apply the 24-hour rule — wait until tomorrow before confirming." }); }
-  else if (reason === "planned" || reason === "upgrade") { checks.push({ icon:"✓", cls:"check-yes", label:"Planned transfer", detail:"Good — this appears to be a considered decision rather than a reaction." }); score += 1; }
-  else { checks.push({ icon:"!", cls:"check-warn", label:"Check your motivation", detail:"Make sure this isn't a reactive move. Revisit your reasoning tomorrow if unsure." }); score += 0.5; }
+  document.getElementById("tc-rows").appendChild(div);
+  updateAddBtn();
+  updateTransferBanner();
+}
 
-  if (!isFree) {
-    maxScore += 1;
-    const ptsDiff = (inn.pts_per_game - out.pts_per_game) * 5;
-    if (ptsDiff > 4) { checks.push({ icon:"✓", cls:"check-yes", label:"Hit likely justified", detail:`Projected +${ptsDiff.toFixed(1)} pts over 5 GWs — covers the 4pt hit` }); score += 1; }
-    else { checks.push({ icon:"✗", cls:"check-no", label:"Hit may not be worth it", detail:`Only +${ptsDiff.toFixed(1)} pts projected over 5 GWs — 4pt hit is hard to recover` }); }
+function removeTransferRow(id) {
+  tcRows = tcRows.filter(r => r.id !== id);
+  const el = document.getElementById(`tc-row-${id}`);
+  if (el) el.remove();
+  // Re-number labels
+  document.querySelectorAll("#tc-rows > div").forEach((div, i) => {
+    const label = div.querySelector("span[style*='text-transform']");
+    if (label) label.textContent = `Transfer ${i + 1}`;
+  });
+  updateAddBtn();
+  updateTransferBanner();
+}
+
+function updateAddBtn() {
+  const btn = document.getElementById("tc-add-btn");
+  if (btn) {
+    btn.disabled = tcRows.length >= 5;
+    btn.style.opacity = tcRows.length >= 5 ? "0.4" : "1";
+  }
+}
+
+function updateRowMeta(id) {
+  const row = tcRows.find(r => r.id === id);
+  if (!row) return;
+  row.isFree = document.getElementById(`tc-free-${id}`)?.value === "1";
+  row.reason = document.getElementById(`tc-reason-${id}`)?.value || "planned";
+}
+
+function setTransferPlayer(rowId, direction, player) {
+  const row = tcRows.find(r => r.id === rowId);
+  if (!row) return;
+  if (direction === "in") {
+    row.playerIn = player;
+    const el = document.getElementById(`tc-in-${rowId}-selected`);
+    if (el) el.textContent = `✓ ${player.name} (${player.team}) £${player.cost.toFixed(1)}m`;
+  } else {
+    row.playerOut = player;
+    const el = document.getElementById(`tc-out-${rowId}-selected`);
+    if (el) el.textContent = `✓ ${player.name} (${player.team}) £${player.cost.toFixed(1)}m`;
+  }
+  updateRunningBalance();
+}
+
+function updateRunningBalance() {
+  let runningBank = myBank;
+  const hasBank = mySquad.length > 0;
+
+  tcRows.forEach((row, i) => {
+    const balEl = document.getElementById(`tc-row-balance-${row.id}`);
+    if (!balEl) return;
+    if (row.playerIn && row.playerOut) {
+      const delta = row.playerOut.cost - row.playerIn.cost;
+      runningBank += delta;
+      if (hasBank) {
+        const cls = runningBank >= 0 ? "var(--gtx)" : "var(--rtx)";
+        balEl.innerHTML = `Net: <strong style="color:${cls}">£${delta >= 0 ? "+" : ""}${delta.toFixed(1)}m</strong> · Bank after: <strong style="color:${cls}">£${runningBank.toFixed(1)}m</strong>`;
+      } else {
+        balEl.innerHTML = `Net cost: <strong>£${(-delta).toFixed(1)}m</strong>`;
+      }
+    } else {
+      balEl.textContent = "";
+    }
+  });
+}
+
+function analyseAllTransfers() {
+  const summaryEl = document.getElementById("tc-summary");
+  const resultEl  = document.getElementById("tc-result");
+
+  if (tcRows.length === 0) {
+    resultEl.innerHTML = '<p style="color:var(--rtx);font-size:13px">Please add at least one transfer first.</p>';
+    return;
   }
 
-  const pct = score / maxScore;
-  const resultCls = pct >= 0.7 ? "decision-go" : pct >= 0.4 ? "decision-maybe" : "decision-hold";
-  const resultText = pct >= 0.7 ? "✓ Go ahead with the transfer" : pct >= 0.4 ? "⚠ Proceed with caution" : "✗ Consider holding — the data doesn't strongly support this transfer";
+  const incomplete = tcRows.filter(r => !r.playerIn || !r.playerOut);
+  if (incomplete.length > 0) {
+    resultEl.innerHTML = `<p style="color:var(--rtx);font-size:13px">Please select both players for all ${tcRows.length > 1 ? "transfers" : "the transfer"} before analysing.</p>`;
+    return;
+  }
 
-  document.getElementById("tc-result").innerHTML = `
-    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
-      <div class="compare-header" style="flex:1"><div style="font-size:15px;font-weight:600"><span class="badge bg">IN</span> ${inn.name}</div><div style="font-size:12px;color:var(--mu);margin-top:2px">${inn.team_full} · ${inn.pos} · £${inn.cost.toFixed(1)}m · ${inn.pts_per_game} pts/GW</div></div>
-      <div class="compare-header" style="flex:1"><div style="font-size:15px;font-weight:600"><span class="badge br">OUT</span> ${out.name}</div><div style="font-size:12px;color:var(--mu);margin-top:2px">${out.team_full} · ${out.pos} · £${out.cost.toFixed(1)}m · ${out.pts_per_game} pts/GW</div></div>
-    </div>
-    ${checks.map(c => `<div class="checklist-item"><div class="check-icon ${c.cls}">${c.icon}</div><div><div class="check-label">${c.label}</div><div class="check-detail">${c.detail}</div></div></div>`).join("")}
-    <div class="decision-result ${resultCls}"><strong>${resultText}</strong><div style="font-size:12px;margin-top:4px;opacity:.8">Score: ${Math.round(score)}/${maxScore} checks passed</div></div>`;
+  // Budget summary
+  let runningBank = myBank;
+  const hasBank = mySquad.length > 0;
+  let totalHitCost = 0;
+  let budgetOk = true;
+
+  const rowResults = tcRows.map((row, i) => {
+    row.isFree = document.getElementById(`tc-free-${row.id}`)?.value === "1";
+    row.reason  = document.getElementById(`tc-reason-${row.id}`)?.value || "planned";
+    const delta = row.playerOut.cost - row.playerIn.cost;
+    runningBank += delta;
+    if (!row.isFree) totalHitCost += 4;
+    if (hasBank && runningBank < 0) budgetOk = false;
+
+    // Individual transfer checks
+    const checks = [];
+    let score = 0, maxScore = 0;
+    const inn = row.playerIn, out = row.playerOut;
+
+    maxScore += 2;
+    if (inn.form > out.form + 1) { checks.push({icon:"✓",cls:"check-yes",label:"Better form",detail:`${inn.name} ${inn.form} vs ${out.name} ${out.form}`}); score+=2; }
+    else if (inn.form >= out.form - 0.5) { checks.push({icon:"!",cls:"check-warn",label:"Similar form",detail:`${inn.name} ${inn.form} vs ${out.name} ${out.form}`}); score+=1; }
+    else { checks.push({icon:"✗",cls:"check-no",label:"Worse form",detail:`${inn.name} ${inn.form} is lower than ${out.name} ${out.form}`}); }
+
+    maxScore += 2;
+    if (inn.pts_per_game > out.pts_per_game + 0.5) { checks.push({icon:"✓",cls:"check-yes",label:"Higher pts/GW",detail:`${inn.name} ${inn.pts_per_game} vs ${out.name} ${out.pts_per_game}`}); score+=2; }
+    else if (inn.pts_per_game >= out.pts_per_game - 0.3) { checks.push({icon:"!",cls:"check-warn",label:"Similar pts/GW",detail:`${inn.name} ${inn.pts_per_game} vs ${out.name} ${out.pts_per_game}`}); score+=1; }
+    else { checks.push({icon:"✗",cls:"check-no",label:"Lower pts/GW",detail:`${inn.name} averages fewer pts/GW`}); }
+
+    maxScore += 1;
+    if (inn.mins_pct >= 70) { checks.push({icon:"✓",cls:"check-yes",label:"Reliable starter",detail:`${inn.name} played ${inn.mins_pct}% of minutes`}); score+=1; }
+    else if (inn.mins_pct >= 50) { checks.push({icon:"!",cls:"check-warn",label:"Some rotation risk",detail:`${inn.name} played ${inn.mins_pct}% of minutes`}); score+=0.5; }
+    else { checks.push({icon:"✗",cls:"check-no",label:"Rotation risk",detail:`${inn.name} only ${inn.mins_pct}% of minutes`}); }
+
+    maxScore += 1;
+    if (inn.status === "a") { checks.push({icon:"✓",cls:"check-yes",label:"Fully fit",detail:`No fitness concerns for ${inn.name}`}); score+=1; }
+    else { checks.push({icon:"✗",cls:"check-no",label:"Fitness concern",detail:`${inn.name}: ${inn.news}`}); }
+
+    maxScore += 1;
+    if (row.reason === "reactive") { checks.push({icon:"✗",cls:"check-no",label:"⚠ Reactive transfer",detail:"Apply the 24-hour rule before confirming."}); }
+    else if (row.reason === "planned" || row.reason === "upgrade") { checks.push({icon:"✓",cls:"check-yes",label:"Planned transfer",detail:"A considered decision — good."}); score+=1; }
+    else { checks.push({icon:"!",cls:"check-warn",label:"Check your motivation",detail:"Make sure this isn't reactive."}); score+=0.5; }
+
+    if (!row.isFree) {
+      maxScore += 1;
+      const ptsDiff = (inn.pts_per_game - out.pts_per_game) * 5;
+      if (ptsDiff > 4) { checks.push({icon:"✓",cls:"check-yes",label:"Hit justified",detail:`+${ptsDiff.toFixed(1)} pts over 5 GWs covers the 4pt cost`}); score+=1; }
+      else { checks.push({icon:"✗",cls:"check-no",label:"Hit may not be worth it",detail:`Only +${ptsDiff.toFixed(1)} pts projected — hard to justify`}); }
+    }
+
+    const pct = score / maxScore;
+    const verdict = pct >= 0.7 ? {cls:"decision-go", text:"✓ Good transfer"} : pct >= 0.4 ? {cls:"decision-maybe", text:"⚠ Proceed with caution"} : {cls:"decision-hold", text:"✗ Consider holding"};
+    const netStr = delta >= 0 ? `+£${delta.toFixed(1)}m` : `-£${Math.abs(delta).toFixed(1)}m`;
+
+    return { row, checks, score, maxScore, verdict, delta, netStr };
+  });
+
+  // Final budget check
+  let budgetHtml = "";
+  if (hasBank) {
+    const finalCls = budgetOk ? "decision-go" : "decision-hold";
+    const totalNetSpend = tcRows.reduce((s,r) => s + (r.playerIn.cost - r.playerOut.cost), 0);
+    budgetHtml = `
+      <div class="decision-result ${finalCls}" style="margin-bottom:1rem">
+        <strong>${budgetOk ? "✓ Budget checks out" : "✗ Insufficient funds"}</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:10px;font-size:13px">
+          <div><div style="opacity:.7;font-size:11px">Starting bank</div><strong>£${myBank.toFixed(1)}m</strong></div>
+          <div><div style="opacity:.7;font-size:11px">Total net spend</div><strong>${totalNetSpend > 0 ? "+" : ""}£${(-totalNetSpend).toFixed(1)}m</strong></div>
+          ${totalHitCost > 0 ? `<div><div style="opacity:.7;font-size:11px">Hit cost</div><strong>-${totalHitCost} pts</strong></div>` : ""}
+          <div><div style="opacity:.7;font-size:11px">Remaining bank</div><strong>£${runningBank.toFixed(1)}m</strong></div>
+        </div>
+        ${!budgetOk ? `<p style="margin-top:8px;font-size:12px">You would go £${Math.abs(runningBank).toFixed(1)}m over budget. Adjust your transfers or free up funds first.</p>` : ""}
+      </div>`;
+  } else {
+    const totalNetSpend = tcRows.reduce((s,r) => s + (r.playerIn.cost - r.playerOut.cost), 0);
+    budgetHtml = `
+      <div class="decision-result decision-maybe" style="margin-bottom:1rem">
+        <strong>Budget estimate (no team loaded)</strong>
+        <div style="font-size:13px;margin-top:6px">Total net spend: <strong>${totalNetSpend > 0 ? "+" : ""}£${totalNetSpend.toFixed(1)}m</strong>${totalHitCost > 0 ? ` · Hit cost: <strong>-${totalHitCost} pts</strong>` : ""}</div>
+        <div style="font-size:12px;opacity:.8;margin-top:4px">Load a team in the My Team tab for exact budget checks.</div>
+      </div>`;
+  }
+
+  summaryEl.innerHTML = budgetHtml;
+
+  // Individual transfer results
+  resultEl.innerHTML = rowResults.map((r, i) => `
+    <div style="margin-bottom:1rem">
+      <p class="lbl" style="margin-bottom:8px">Transfer ${i+1}: ${r.row.playerIn.name} IN · ${r.row.playerOut.name} OUT · <span style="color:var(--mu)">${r.netStr}</span>${!r.row.isFree ? ` · <span style="color:var(--rtx)">-4pt hit</span>` : ""}</p>
+      ${r.checks.map(c => `<div class="checklist-item" style="padding:6px 0"><div class="check-icon ${c.cls}">${c.icon}</div><div><div class="check-label">${c.label}</div><div class="check-detail">${c.detail}</div></div></div>`).join("")}
+      <div class="decision-result ${r.verdict.cls}" style="margin-top:8px"><strong>${r.verdict.text}</strong><span style="font-size:12px;opacity:.8;margin-left:8px">${Math.round(r.score)}/${r.maxScore} checks passed</span></div>
+    </div>`).join('<hr style="border:none;border-top:.5px solid var(--bd);margin:1rem 0">');
 }
+
+function runTransferCheck() { analyseAllTransfers(); }
 
 
 async function loadMyTeam() {
@@ -649,6 +865,7 @@ async function loadMyTeam() {
     const teamValue = (picksData.entry_history?.value || 0) / 10;
 
     // Map picks to player data
+    mySquad = [];
     const squad = picks.map(pick => {
       const player = PLAYERS.find(p => p.id === pick.element);
       if (!player) return null;
@@ -661,6 +878,14 @@ async function loadMyTeam() {
         is_starting: pick.position <= 11,
       };
     }).filter(Boolean);
+
+    // Sync squad to transfer checker
+    mySquad = squad;
+    myBank = bank;
+    myTeamName = entry.name || "My Team";
+    if (typeof updateTransferBanner === "function") updateTransferBanner();
+    // Refresh OUT dropdowns to use squad
+    document.querySelectorAll("[id^='tc-out-'][id$='-input']").forEach(el => { el.placeholder = "Your squad players..."; });
 
     const starters = squad.filter(p => p.is_starting).sort((a,b) => a.position - b.position);
     const bench = squad.filter(p => !p.is_starting).sort((a,b) => a.position - b.position);
@@ -736,6 +961,7 @@ function show(s, btn) {
   document.querySelectorAll(".nav button").forEach(e => e.classList.remove("on"));
   document.getElementById("s-" + s).classList.add("on");
   btn.classList.add("on");
+  if (s === "transfer" && tcRows.length === 0) initTransferTab();
 }
 
 document.addEventListener("click", e => {
@@ -743,6 +969,7 @@ document.addEventListener("click", e => {
 });
 
 loadData();
+initTransferTab();
 </script>
 </body>
 </html>
