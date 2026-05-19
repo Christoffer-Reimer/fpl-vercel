@@ -5,26 +5,35 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FPL Player Evaluation Framework</title>
 <style>
-:root{--bg:#f4f3f0;--sf:#fff;--sf2:#f0efe9;--sf3:#e8e7e2;--bd:rgba(0,0,0,0.09);--tx:#1a1a18;--mu:#6b6b67;--hi:#9b9b97;
-  --gbg:#eaf3de;--gtx:#3b6d11;--bbg:#e6f1fb;--btx:#185fa5;--rbg:#fcebeb;--rtx:#a32d2d;
-  --abg:#faeeda;--atx:#854f0b;--pbg:#eeedfe;--ptx:#3c3489;--tbg:#e1f5ee;--ttx:#0f6e56;--r:10px;--rs:6px}
-@media(prefers-color-scheme:dark){:root{--bg:#181816;--sf:#222220;--sf2:#2a2a28;--sf3:#333330;--bd:rgba(255,255,255,0.09);
-  --tx:#f0efe9;--mu:#9b9b97;--hi:#6b6b67;--gbg:#173404;--gtx:#c0dd97;--bbg:#042c53;--btx:#b5d4f4;
-  --rbg:#501313;--rtx:#f7c1c1;--abg:#412402;--atx:#fac775;--pbg:#26215c;--ptx:#cecbf6;--tbg:#04342c;--ttx:#9fe1cb}}
+:root{
+  --bg:#f4f3f0;--sf:#fff;--sf2:#f9f8f5;--sf3:#f0efe9;--bd:rgba(0,0,0,0.07);
+  --tx:#1a1a18;--mu:#6b6b67;--hi:#9b9b97;
+  --gbg:#eaf3de;--gtx:#27500A;--bbg:#e6f1fb;--btx:#0C447C;--rbg:#fcebeb;--rtx:#791F1F;
+  --abg:#faeeda;--atx:#633806;--pbg:#eeedfe;--ptx:#3c3489;--tbg:#e1f5ee;--ttx:#085041;
+  --green-dark:#085041;--green-mid:#1D9E75;--green-light:#9FE1CB;
+  --r:10px;--rs:6px
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#181816;--sf:#222220;--sf2:#2a2a28;--sf3:#333330;--bd:rgba(255,255,255,0.09);
+  --tx:#f0efe9;--mu:#9b9b97;--hi:#6b6b67;
+  --gbg:#173404;--gtx:#c0dd97;--bbg:#042c53;--btx:#b5d4f4;--rbg:#501313;--rtx:#f7c1c1;
+  --abg:#412402;--atx:#fac775;--pbg:#26215c;--ptx:#cecbf6;--tbg:#04342c;--ttx:#9fe1cb;
+  --green-dark:#085041;--green-mid:#1D9E75;--green-light:#5DCAA5
+}}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.5}
 .wrap{max-width:1100px;margin:0 auto;padding:1.5rem 1.25rem}
 h1{font-size:22px;font-weight:600}
 .lbl{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--mu);margin-bottom:10px}
-.card{background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem}
+.card{background:var(--sf);border:.5px solid var(--bd);border-radius:var(--r);padding:1.25rem;margin-bottom:1rem} .metrics{margin-bottom:1rem}
 .badge{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px}
 .bg{background:var(--gbg);color:var(--gtx)} .bb{background:var(--bbg);color:var(--btx)}
 .br{background:var(--rbg);color:var(--rtx)} .ba{background:var(--abg);color:var(--atx)}
 .bp{background:var(--pbg);color:var(--ptx)} .bt{background:var(--tbg);color:var(--ttx)}
-.nav{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap}
-.nav button{font-size:13px;padding:6px 16px;border-radius:var(--rs);border:.5px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer;transition:all .15s}
-.nav button:hover{background:var(--sf2)}
-.nav button.on{background:var(--sf2);color:var(--tx);font-weight:500;border-color:var(--tx)}
+.nav{display:flex;gap:0;margin-bottom:1.25rem;flex-wrap:wrap;background:var(--green-dark);border-radius:0 0 0 0;overflow:hidden}
+.nav button{font-size:13px;padding:11px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;transition:all .15s;border-radius:0}
+.nav button:hover{color:rgba(255,255,255,0.8);background:rgba(255,255,255,0.05)}
+.nav button.on{color:#fff;font-weight:500;border-bottom:2px solid var(--green-light)}
 .section{display:none}.section.on{display:block}
 input,select{background:var(--sf);border:.5px solid var(--bd);border-radius:var(--rs);padding:7px 12px;font-size:13px;color:var(--tx);outline:none}
 input:focus,select:focus{border-color:var(--btx)}
@@ -46,7 +55,7 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--sf2)}
 .dropdown-item:last-child{border-bottom:none}
 .dropdown-item:hover{background:var(--sf2)}
 .overall-score{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;font-size:13px;font-weight:700}
-.os-great{background:var(--gbg);color:var(--gtx)} .ml{font-size:12px;color:var(--mu);margin-bottom:4px} .mv{font-size:24px;font-weight:600;line-height:1.1} .os-good{background:var(--bbg);color:var(--btx)}
+.os-great{background:var(--gbg);color:var(--gtx)} .ml{font-size:11px;color:var(--hi);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px} .mv{font-size:26px;font-weight:500;line-height:1.1;letter-spacing:-.5px} .os-good{background:var(--bbg);color:var(--btx)}
 .os-avg{background:var(--abg);color:var(--atx)} .os-poor{background:var(--rbg);color:var(--rtx)}
 .pos-gk{background:#faeeda;color:#854f0b} .pos-def{background:#e6f1fb;color:#185fa5}
 .pos-mid{background:#eaf3de;color:#3b6d11} .pos-fwd{background:#fcebeb;color:#a32d2d}
@@ -72,20 +81,26 @@ tr:last-child td{border-bottom:none} tr:hover td{background:var(--sf2)}
 .error-box{background:var(--rbg);color:var(--rtx);border-radius:var(--r);padding:1rem 1.25rem;margin:1rem 0}
 .last-updated{font-size:12px;color:var(--hi);margin-top:3px}
 footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-bottom:2rem}
+.pulse-dot{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0}
+.row-border-great{border-left:3px solid #085041}
+.row-border-good{border-left:3px solid #1D9E75}
+.row-border-avg{border-left:3px solid #BA7517}
+.row-border-poor{border-left:3px solid #E24B4A}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap"><div style="border-radius:var(--r);overflow:hidden;border:.5px solid var(--bd);margin-bottom:1.5rem" id="app-shell">
 
-<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;flex-wrap:wrap;gap:8px">
-  <div>
-    <h1>FPL Player Evaluation Framework</h1>
-    <p class="last-updated" id="last-updated">Loading live data...</p>
+<div style="background:var(--green-dark);border-radius:var(--r) var(--r) 0 0;padding:18px 20px 0;margin-bottom:0">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div>
+      <h1 style="color:#fff;font-size:20px;letter-spacing:-.3px">FPL Framework</h1>
+      <p class="last-updated" id="last-updated" style="color:var(--green-light);margin-top:2px">Loading live data...</p>
+    </div>
+    <button onclick="loadData()" id="refresh-btn" style="padding:6px 14px;border-radius:var(--rs);border:.5px solid rgba(255,255,255,0.2);background:transparent;color:rgba(255,255,255,0.7);cursor:pointer;font-size:13px;margin-top:4px">
+      ↻ Refresh
+    </button>
   </div>
-  <button onclick="loadData()" id="refresh-btn" style="padding:7px 16px;border-radius:var(--rs);border:.5px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px">
-    ↻ Refresh data
-  </button>
-</div>
 
 <div id="loading" class="loader">
   <div class="spinner"></div>
@@ -93,8 +108,9 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
   <div class="loader-step" id="load-step">Connecting to FPL API</div>
 </div>
 
+</div>
 <div id="main-content" style="display:none">
-  <div class="nav">
+  <div class="nav" style="border-radius:0;margin-bottom:0">
     <button onclick="show('myteam',this)">My team</button>
     <button class="on" onclick="show('rankings',this)">Player rankings</button>
     <button onclick="show('compare',this)">Compare players</button>
@@ -103,7 +119,7 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
     <button onclick="show('value',this)">Value tracker</button>
   </div>
 
-  <!-- MY TEAM -->
+  <div style="padding:20px"><div id="sections-inner"><!-- MY TEAM -->
   <div id="s-myteam" class="section">
     <div class="card">
       <p class="lbl">Your squad</p>
@@ -372,7 +388,7 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
   </div>
 </div>
 
-<footer id="footer"></footer>
+</div></div></div><footer id="footer" style="font-size:12px;color:var(--hi);text-align:center;padding:1.5rem 0"></footer>
 </div>
 
 <script>
@@ -461,9 +477,9 @@ async function loadData() {
     document.getElementById("loading").style.display = "none";
     document.getElementById("main-content").style.display = "block";
     document.getElementById("last-updated").textContent =
-      `Live data · GW${currentGW} · Updated ${new Date().toLocaleString("en-GB", {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} · ${PLAYERS.length} players loaded`;
+      `GW${currentGW} · Updated ${new Date().toLocaleString("en-GB", {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} · ${PLAYERS.length} players`;
     document.getElementById("footer").textContent =
-      `FPL Player Evaluation Framework · Live data · Built for Reimers Tunge Drenge`;
+      `FPL Framework · Live GW${currentGW} data · ${PLAYERS.length} players loaded`;
 
     renderTable();
 
@@ -485,12 +501,34 @@ function setStep(msg) {
 
 function posClass(pos) { return {GK:"pos-gk",DEF:"pos-def",MID:"pos-mid",FWD:"pos-fwd"}[pos] || ""; }
 function osClass(s) { return s >= 7 ? "os-great" : s >= 5 ? "os-good" : s >= 3 ? "os-avg" : "os-poor"; }
-function barColor(s) { return s >= 7 ? "#639922" : s >= 5 ? "#378ADD" : s >= 3 ? "#BA7517" : "#E24B4A"; }
+function barColor(s) { return s >= 8 ? "#085041" : s >= 6 ? "#1D9E75" : s >= 4 ? "#BA7517" : "#E24B4A"; }
+function scoreBadge(s) {
+  const bg = s >= 8 ? "#085041" : s >= 6 ? "#1D9E75" : s >= 4 ? "#BA7517" : "#E24B4A";
+  return `<span style="background:${bg};color:#fff;font-size:12px;font-weight:500;padding:4px 10px;border-radius:20px;min-width:40px;display:inline-block;text-align:center">${s}</span>`;
+}
+function rowBorderClass(s) { return s >= 8 ? "row-border-great" : s >= 6 ? "row-border-good" : s >= 4 ? "row-border-avg" : "row-border-poor"; }
 function statusBadge(p) {
   if (p.status === "i") return ` <span class="badge br" style="font-size:10px">Injured</span>`;
   if (p.status === "d") return ` <span class="badge ba" style="font-size:10px">Doubt</span>`;
   if (p.status === "s") return ` <span class="badge br" style="font-size:10px">Suspended</span>`;
   return "";
+}
+
+function formPulse(p) {
+  // Use last 5 GW scores approximated from form and pts_per_game with some variance
+  // Since we only have aggregate data, we simulate 5 dots based on form score
+  const form = p.form;
+  const ppg = p.pts_per_game;
+  // Generate 5 representative dots from available stats
+  const dotColor = (val) => {
+    if (val >= 10) return "#085041";
+    if (val >= 6)  return "#1D9E75";
+    if (val >= 3)  return "#BA7517";
+    return "#E24B4A";
+  };
+  // Approximate last 5 based on form (recent) and ppg (overall)
+  const recent = [form*1.1, form, form*0.9, ppg*1.1, ppg*0.9].map(v => Math.max(0, v));
+  return recent.map(v => `<span class="pulse-dot" style="background:${dotColor(v)}" title="${v.toFixed(1)} pts"></span>`).join("");
 }
 
 function renderTable() {
@@ -527,8 +565,9 @@ function renderTable() {
       <td style="font-weight:500">${p.value}</td>
       <td>${p.selected_pct}%</td>
       <td>${p.gi_per90}</td>
-      <td><div class="score-bar"><div class="bar-track"><div class="bar-fill" style="width:${p.overall * 10}%;background:${barColor(p.overall)}"></div></div><span class="overall-score ${osClass(p.overall)}">${p.overall}</span></div></td>
-    </tr>`).join("");
+      <td><div style="display:flex;gap:3px;align-items:center">${formPulse(p)}</div></td>
+      <td>${scoreBadge(p.overall)}</td>
+    </tr>`).join("")
 }
 
 function sortBy(col) {
