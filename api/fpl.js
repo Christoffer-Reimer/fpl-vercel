@@ -35,7 +35,13 @@ export default async function handler(req, res) {
     if (!fplRes.ok) return res.status(fplRes.status).json({ error: `FPL API returned ${fplRes.status}` });
 
     const data = await fplRes.json();
-    res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate");
+
+    // Cache bootstrap data for 1 hour at the edge — serves instantly after first load
+    // Team/picks data cached for 5 minutes only (changes more frequently)
+    const isBootstrap = endpoint === "bootstrap-static/";
+    const maxAge = isBootstrap ? 3600 : 300;
+
+    res.setHeader("Cache-Control", `s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
     return res.status(200).json(data);
 
   } catch (err) {
