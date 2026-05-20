@@ -735,7 +735,7 @@ function addTransferRow() {
   div.id = `tc-row-${id}`;
   div.style.cssText = "background:var(--sf2);border-radius:8px;padding:14px;margin-bottom:10px;position:relative";
 
-  const outPlaceholder = mySquad.length > 0 ? "Your squad players..." : "Search player to sell...";
+  // outPlaceholder handled inline in template
 
   div.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -753,10 +753,15 @@ function addTransferRow() {
       </div>
       <div style="flex:1;min-width:180px">
         <p style="font-size:12px;color:var(--mu);margin-bottom:4px">Player OUT <span class="badge br">selling</span></p>
+        ${mySquad.length > 0 ? `
+        <select id="tc-out-${id}-select" onchange="selectPlayerFromSquad(${id}, this.value)" style="width:100%;padding:7px 12px;font-size:13px;background:var(--sf);border:.5px solid var(--bd);border-radius:var(--rs);color:var(--tx)">
+          <option value="">Select from your squad...</option>
+          ${mySquad.sort((a,b) => {const po={'GK':1,'DEF':2,'MID':3,'FWD':4}; return po[a.pos]-po[b.pos] || a.name.localeCompare(b.name);}).map(p => `<option value="${p.id}">${p.name} (${p.pos} · ${p.team} · £${p.cost.toFixed(1)}m)</option>`).join("")}
+        </select>` : `
         <div class="search-wrap">
-          <input type="text" id="tc-out-${id}-input" placeholder="${outPlaceholder}" oninput="searchPlayer('tc-out-${id}')" autocomplete="off" style="width:100%">
+          <input type="text" id="tc-out-${id}-input" placeholder="Search player to sell..." oninput="searchPlayer('tc-out-${id}')" autocomplete="off" style="width:100%">
           <div class="dropdown" id="tc-out-${id}-drop"></div>
-        </div>
+        </div>`}
         <div id="tc-out-${id}-selected" style="font-size:12px;color:var(--rtx);margin-top:4px;min-height:16px"></div>
       </div>
     </div>
@@ -812,6 +817,13 @@ function updateRowMeta(id) {
   if (!row) return;
   row.isFree = document.getElementById(`tc-free-${id}`)?.value === "1";
   row.reason = document.getElementById(`tc-reason-${id}`)?.value || "planned";
+}
+
+function selectPlayerFromSquad(rowId, playerId) {
+  if (!playerId) return;
+  const player = PLAYERS.find(p => p.id === parseInt(playerId));
+  if (!player) return;
+  setTransferPlayer(rowId, "out", player);
 }
 
 function setTransferPlayer(rowId, direction, player) {
