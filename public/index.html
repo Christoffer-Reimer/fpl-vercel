@@ -703,6 +703,33 @@ function renderCompare() {
 }
 
 // ── Multi-transfer planner ───────────────────────────────
+function rebuildTransferRows() {
+  // Re-render all existing rows to update OUT field with squad dropdown if now available
+  tcRows.forEach(row => {
+    const outField = document.getElementById(`tc-out-${row.id}-select`);
+    const outSearch = document.getElementById(`tc-out-${row.id}-input`);
+    // If squad loaded but still showing search input, rebuild the row
+    if (mySquad.length > 0 && !outField && outSearch) {
+      const rowEl = document.getElementById(`tc-row-${row.id}`);
+      if (rowEl) {
+        const selectHtml = `<select id="tc-out-${row.id}-select" onchange="selectPlayerFromSquad(${row.id}, this.value)" style="width:100%;padding:7px 12px;font-size:13px;background:var(--sf);border:.5px solid var(--bd);border-radius:var(--rs);color:var(--tx)">
+          <option value="">Select from your squad...</option>
+          ${mySquad.sort((a,b) => {const po={'GK':1,'DEF':2,'MID':3,'FWD':4}; return po[a.pos]-po[b.pos] || a.name.localeCompare(b.name);}).map(p => `<option value="${p.id}">${p.name} (${p.pos} · ${p.team} · £${p.cost.toFixed(1)}m)</option>`).join("")}
+        </select>`;
+        const wrap = outSearch.closest('.search-wrap');
+        if (wrap) wrap.outerHTML = selectHtml;
+      }
+    }
+    // Re-select previously chosen player
+    if (row.playerOut) {
+      const sel = document.getElementById(`tc-out-${row.id}-select`);
+      if (sel) sel.value = row.playerOut.id;
+      const selEl = document.getElementById(`tc-out-${row.id}-selected`);
+      if (selEl) selEl.textContent = `✓ ${row.playerOut.name} (${row.playerOut.team}) £${row.playerOut.cost.toFixed(1)}m`;
+    }
+  });
+}
+
 function initTransferTab() {
   tcRows = [];
   tcNextId = 0;
@@ -1027,8 +1054,7 @@ async function loadMyTeam() {
     myBank = bank;
     myTeamName = entry.name || "My Team";
     if (typeof updateTransferBanner === "function") updateTransferBanner();
-    // Refresh OUT dropdowns to use squad
-    document.querySelectorAll("[id^='tc-out-'][id$='-input']").forEach(el => { el.placeholder = "Your squad players..."; });
+    if (typeof rebuildTransferRows === "function") rebuildTransferRows();
 
     const starters = squad.filter(p => p.is_starting).sort((a,b) => a.position - b.position);
     const bench = squad.filter(p => !p.is_starting).sort((a,b) => a.position - b.position);
@@ -1208,7 +1234,10 @@ function show(s, btn) {
   document.querySelectorAll(".nav button").forEach(e => e.classList.remove("on"));
   document.getElementById("s-" + s).classList.add("on");
   btn.classList.add("on");
-  if (s === "transfer" && tcRows.length === 0) initTransferTab();
+  if (s === "transfer") {
+    if (tcRows.length === 0) initTransferTab();
+    else rebuildTransferRows(); // rebuild to pick up any newly loaded squad
+  }
   if (s === "value") renderValueTable();
 }
 
