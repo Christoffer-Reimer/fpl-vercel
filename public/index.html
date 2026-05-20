@@ -395,6 +395,8 @@ footer{font-size:12px;color:var(--hi);text-align:center;margin-top:2rem;padding-
 const API_BASE = "/api/fpl";
 let PLAYERS = [];
 let sortCol = "overall", sortDir = -1;
+const playerHistoryCache = {}; // pid -> array of {gw, pts}
+let historyFetchInProgress = false;
 let compareA = null, compareB = null;
 let tcIn = null, tcOut = null;
 // Multi-transfer state
@@ -487,11 +489,13 @@ async function loadData() {
     document.getElementById("loading").style.display = "none";
     document.getElementById("main-content").style.display = "block";
     document.getElementById("last-updated").textContent =
-      `GW${currentGW} · Updated ${new Date().toLocaleString("en-GB", {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} · ${PLAYERS.length} players`;
+      `GW${currentGW} · Updated ${new Date().toLocaleString("en-GB", {day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})} · ${PLAYERS.length} players · Loading form data...`;
     document.getElementById("footer").textContent =
       `FPL Framework · Live GW${currentGW} data · ${PLAYERS.length} players loaded`;
 
     renderTable();
+    // Start background fetch of player histories (non-blocking)
+    setTimeout(() => fetchPlayerHistories(), 500);
 
   } catch(e) {
     document.getElementById("loading").innerHTML = `
@@ -524,21 +528,58 @@ function statusBadge(p) {
   return "";
 }
 
+function dotColor(pts) {
+  if (pts >= 10) return "#085041";
+  if (pts >= 6)  return "#1D9E75";
+  if (pts >= 3)  return "#BA7517";
+  return "#E24B4A";
+}
+
 function formPulse(p) {
-  // Use last 5 GW scores approximated from form and pts_per_game with some variance
-  // Since we only have aggregate data, we simulate 5 dots based on form score
-  const form = p.form;
-  const ppg = p.pts_per_game;
-  // Generate 5 representative dots from available stats
-  const dotColor = (val) => {
-    if (val >= 10) return "#085041";
-    if (val >= 6)  return "#1D9E75";
-    if (val >= 3)  return "#BA7517";
-    return "#E24B4A";
-  };
-  // Approximate last 5 based on form (recent) and ppg (overall)
-  const recent = [form*1.1, form, form*0.9, ppg*1.1, ppg*0.9].map(v => Math.max(0, v));
-  return recent.map(v => `<span class="pulse-dot" style="background:${dotColor(v)}" title="${v.toFixed(1)} pts"></span>`).join("");
+  const hist = playerHistoryCache[p.id];
+  if (hist && hist.length > 0) {
+    const last5 = hist.slice(-5);
+    // Pad with grey dots if fewer than 5 GWs
+    const dots = [];
+    for (let i = 0; i < 5; i++) {
+      const entry = last5[i - (5 - last5.length)];
+      if (entry === undefined) {
+        dots.push(`<span class="pulse-dot" style="background:#e0dfd9" title="No data"></span>`);
+      } else {
+        dots.push(`<span class="pulse-dot" style="background:${dotColor(entry.pts)};cursor:pointer" title="GW${entry.gw}: ${entry.pts} pts"></span>`);
+      }
+    }
+    return dots.join("");
+  }
+  // Placeholder grey dots while loading
+  return Array(5).fill(`<span class="pulse-dot" style="background:#e0dfd9;opacity:.5" title="Loading..."></span>`).join("");
+}
+
+async function fetchPlayerHistories() {
+  if (historyFetchInProgress) return;
+  historyFetchInProgress = true;
+
+  // Fetch history for top 200 players by overall score
+  const top200 = [...PLAYERS].sort((a,b) => b.overall - a.overall).slice(0, 200);
+  const BATCH = 10; // fetch 10 at a time to avoid hammering API
+
+  for (let i = 0; i < top200.length; i += BATCH) {
+    const batch = top200.slice(i, i + BATCH);
+    await Promise.all(batch.map(async p => {
+      if (playerHistoryCache[p.id]) return; // already fetched
+      try {
+        const res = await fetch(`${API_BASE}?endpoint=element-summary/${p.id}/`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const history = (data.history || []).map(h => ({ gw: h.round, pts: h.total_points }));
+        playerHistoryCache[p.id] = history;
+      } catch(e) { /* silently skip */ }
+    }));
+    // Re-render table after each batch so dots update live
+    renderTable();
+    await new Promise(r => setTimeout(r, 200)); // small delay between batches
+  }
+  historyFetchInProgress = false;
 }
 
 function renderTable() {
