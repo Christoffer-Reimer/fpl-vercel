@@ -19,28 +19,40 @@ export default async function handler(req, res) {
   if (!isAllowed) return res.status(403).json({ error: "Endpoint not allowed" });
 
   try {
-    const fplRes = await fetch(
-      `https://fantasy.premierleague.com/api/${endpoint}`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "application/json, text/plain, */*",
-          "Accept-Language": "en-GB,en;q=0.9",
-          "Referer": "https://fantasy.premierleague.com/",
-          "Origin": "https://fantasy.premierleague.com",
-        },
+    // 12-second timeout on the FPL API call
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    let fplRes;
+    try {
+      fplRes = await fetch(
+        `https://fantasy.premierleague.com/api/${endpoint}`,
+        {
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-GB,en;q=0.9",
+            "Referer": "https://fantasy.premierleague.com/",
+            "Origin": "https://fantasy.premierleague.com",
+          },
+        }
+      );
+    } catch (fetchErr) {
+      clearTimeout(timeout);
+      if (fetchErr.name === "AbortError") {
+        return res.status(504).json({ error: "FPL API timed out after 12 seconds" });
       }
-    );
+      throw fetchErr;
+    }
+    clearTimeout(timeout);
 
     if (!fplRes.ok) return res.status(fplRes.status).json({ error: `FPL API returned ${fplRes.status}` });
 
     const data = await fplRes.json();
 
-    // Cache bootstrap data for 1 hour at the edge — serves instantly after first load
-    // Team/picks data cached for 5 minutes only (changes more frequently)
     const isBootstrap = endpoint === "bootstrap-static/";
     const maxAge = isBootstrap ? 3600 : 300;
-
     res.setHeader("Cache-Control", `s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
     return res.status(200).json(data);
 
