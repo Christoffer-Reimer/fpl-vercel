@@ -411,7 +411,17 @@ async function loadData() {
 
   try {
     setStep("Fetching live FPL data...");
-    const res = await fetch(`${API_BASE}?endpoint=bootstrap-static/`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    let res;
+    try {
+      res = await fetch(`${API_BASE}?endpoint=bootstrap-static/`, { signal: controller.signal });
+    } catch(fetchErr) {
+      clearTimeout(timeout);
+      if (fetchErr.name === "AbortError") throw new Error("Request timed out after 15 seconds — the FPL API may be slow. Please try again in a moment.");
+      throw fetchErr;
+    }
+    clearTimeout(timeout);
     if (!res.ok) throw new Error("API returned " + res.status);
     const data = await res.json();
     if (!data.elements) throw new Error("Invalid data received");
@@ -595,7 +605,6 @@ function searchPlayer(slot) {
   const q = document.getElementById(inputId).value.toLowerCase();
   const drop = document.getElementById(dropId);
   if (q.length < 2) { drop.classList.remove("open"); return; }
-  const matches = PLAYERS.filter(p => p.name.toLowerCase().includes(q) || p.full_name.toLowerCase().includes(q)).slice(0, 8);
   // If slot is an OUT slot and squad is loaded, restrict to squad
   let pool = PLAYERS;
   if (slot.startsWith("tc-out-") && mySquad.length > 0) {
