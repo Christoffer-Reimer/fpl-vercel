@@ -13,13 +13,13 @@ export default async function handler(req, res) {
     /^entry\/\d+\/$/,
     /^entry\/\d+\/event\/\d+\/picks\/$/,
     /^entry\/\d+\/history\/$/,
+    /^element-summary\/\d+\/$/,
   ];
 
   const isAllowed = allowedPatterns.some(p => p.test(endpoint));
   if (!isAllowed) return res.status(403).json({ error: "Endpoint not allowed" });
 
   try {
-    // 12-second timeout on the FPL API call
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
 
@@ -51,8 +51,11 @@ export default async function handler(req, res) {
 
     const data = await fplRes.json();
 
+    // Bootstrap cached 1 hour, element summaries 30 mins, team data 5 mins
     const isBootstrap = endpoint === "bootstrap-static/";
-    const maxAge = isBootstrap ? 3600 : 300;
+    const isElement = endpoint.startsWith("element-summary/");
+    const maxAge = isBootstrap ? 3600 : isElement ? 1800 : 300;
+
     res.setHeader("Cache-Control", `s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
     return res.status(200).json(data);
 
